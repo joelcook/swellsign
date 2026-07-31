@@ -1,0 +1,40 @@
+services:
+  api:
+    build: .
+    command: ["swellsign", "api", "--host", "0.0.0.0"]
+    environment:
+      SWELLSIGN_CONFIG_PATH: /app/config/spots.yaml
+      SWELLSIGN_DATABASE_PATH: /app/data/swellsign.db
+      SWELLSIGN_SNAPSHOT_DIR: /app/data/snapshots
+    volumes:
+      - swell-data:/app/data
+      - ./config:/app/config:ro
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/health')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  collector:
+    build: .
+    command: ["swellsign", "collector"]
+    environment:
+      SWELLSIGN_CONFIG_PATH: /app/config/spots.yaml
+      SWELLSIGN_DATABASE_PATH: /app/data/swellsign.db
+      SWELLSIGN_SNAPSHOT_DIR: /app/data/snapshots
+    volumes:
+      - swell-data:/app/data
+      - ./config:/app/config:ro
+    restart: unless-stopped
+
+volumes:
+  swell-data:
+

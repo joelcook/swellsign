@@ -1,0 +1,7 @@
+# Copy to CIRCUITPY/settings.toml and keep the real file out of source control.
+CIRCUITPY_WIFI_SSID = "your-network"
+CIRCUITPY_WIFI_PASSWORD = "your-password"
+SWELLSIGN_API_URL = "http://192.168.1.10:8000/v1/spots/new-smyrna/display"
+SWELLSIGN_REFRESH_SECONDS = 15
+SWELLSIGN_BRIGHTNESS = 0.35
+

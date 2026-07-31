@@ -1,0 +1,20 @@
+[Unit]
+Description=Swell Sign observation API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=swellsign
+Group=swellsign
+WorkingDirectory=/opt/swellsign
+EnvironmentFile=-/etc/swellsign.env
+ExecStart=/opt/swellsign/.venv/bin/swellsign api --host 127.0.0.1
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+

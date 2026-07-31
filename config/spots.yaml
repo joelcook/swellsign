@@ -1,0 +1,71 @@
+freshness:
+  fresh_max_age_minutes: 90
+  delayed_max_age_minutes: 180
+  stale_max_age_minutes: 360
+
+trend:
+  window_hours: 6
+  minimum_samples: 4
+  minimum_coverage_hours: 3
+  change_threshold_ft: 0.30
+
+forecast:
+  provider: open_meteo
+  horizon_hours: 168
+  collection_interval_minutes: 360
+
+stations:
+  ndbc:41070:
+    id: ndbc:41070
+    provider: ndbc
+    provider_station_id: "41070"
+    canonical_physical_station_id: "ndbc:41070"
+    name: New Smyrna Beach Buoy
+    latitude: 29.025
+    longitude: -80.884
+    expected_interval_minutes: 60
+    capabilities: [waves, water_temperature]
+    attribution: NOAA National Data Buoy Center
+  ndbc:41069:
+    id: ndbc:41069
+    provider: ndbc
+    provider_station_id: "41069"
+    canonical_physical_station_id: "ndbc:41069"
+    name: New Smyrna Beach Wind
+    latitude: 29.025
+    longitude: -80.884
+    expected_interval_minutes: 60
+    capabilities: [wind]
+    attribution: NOAA National Data Buoy Center
+  ndbc:41113:
+    id: ndbc:41113
+    provider: ndbc
+    provider_station_id: "41113"
+    canonical_physical_station_id: "cdip:143"
+    name: Cape Canaveral Nearshore
+    latitude: 28.400
+    longitude: -80.533
+    expected_interval_minutes: 30
+    capabilities: [waves, separated_swell]
+    attribution: NOAA NDBC / CDIP
+
+spots:
+  new-smyrna:
+    name: New Smyrna Beach
+    display_name: NEW SMYRNA
+    timezone: America/New_York
+    latitude: 29.0258
+    longitude: -80.9270
+    wave_sources:
+      - station_id: ndbc:41070
+        role: primary
+        maximum_usable_age_minutes: 360
+        preferred_basis: [separated_swell, total_sea]
+      - station_id: ndbc:41113
+        role: fallback
+        maximum_usable_age_minutes: 360
+        preferred_basis: [separated_swell, total_sea]
+    wind_sources:
+      - station_id: ndbc:41069
+        role: primary
+        maximum_usable_age_minutes: 360

@@ -1,0 +1,20 @@
+[Unit]
+Description=Swell Sign NOAA and forecast collector
+After=network-online.target swellsign-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=swellsign
+Group=swellsign
+WorkingDirectory=/opt/swellsign
+EnvironmentFile=-/etc/swellsign.env
+ExecStart=/opt/swellsign/.venv/bin/swellsign collector
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+

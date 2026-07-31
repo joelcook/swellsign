@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "mode": "observed",
+  "spot": "NEW SMYRNA",
+  "generated_at": "2026-07-30T18:00:00Z",
+  "wave": {
+    "label": "SEAS",
+    "height_ft": 2.6,
+    "period_s": 8.1,
+    "direction": "NE",
+    "observed_at": "2026-07-30T17:48:00Z",
+    "age_minutes": 12,
+    "freshness": "fresh",
+    "trend": "rising"
+  },
+  "wind": {
+    "direction": "W",
+    "speed_mph": 7.8,
+    "observed_at": "2026-07-30T17:38:00Z",
+    "age_minutes": 22,
+    "freshness": "fresh"
+  },
+  "data_state": "fresh",
+  "fallback_used": false,
+  "warnings": []
+}

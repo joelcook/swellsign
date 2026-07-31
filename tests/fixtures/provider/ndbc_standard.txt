@@ -1,0 +1,6 @@
+#YY  MM DD hh mm WDIR WSPD GST WVHT DPD APD MWD PRES   ATMP WTMP DEWP VIS PTDY TIDE EXTRA
+#yr  mo dy hr mn degT m/s  m/s m    sec sec degT hPa   degC degC degC nmi hPa  ft   code
+2026 07 30 17 10 270  3.5  4.2 0.8  8.1 5.8 43  1017.1 28.0 27.2 24.0 MM  MM   MM   A
+2026 07 30 17 10 270  3.5  4.2 0.8  8.1 5.8 43  1017.1 28.0 27.2 24.0 MM  MM   MM   A
+26   07 30 16 10 MM   MM   MM  MM   MM  5.4 MM  1017.4 27.8 27.1 23.8 MM  MM   MM   B
+2026 07 30 15 10 260  2.5

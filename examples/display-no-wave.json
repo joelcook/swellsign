@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "mode": "observed",
+  "spot": "NEW SMYRNA",
+  "generated_at": "2026-07-30T18:00:00Z",
+  "wave": null,
+  "wind": {
+    "direction": "W",
+    "speed_mph": 7.8,
+    "observed_at": "2026-07-30T17:38:00Z",
+    "age_minutes": 22,
+    "freshness": "fresh"
+  },
+  "data_state": "partial",
+  "fallback_used": false,
+  "warnings": ["No usable observed wave measurement is available."]
+}

@@ -1,0 +1,17 @@
+[Unit]
+Description=Swell Sign 128x32 HUB75 display
+After=swellsign-api.service
+Requires=swellsign-api.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/swellsign
+EnvironmentFile=-/etc/swellsign.env
+ExecStart=/opt/swellsign/.venv/bin/swellsign display --api-url http://127.0.0.1:8000/v1/spots/new-smyrna/display
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+

@@ -1,0 +1,21 @@
+{
+  "latitude": 29.03,
+  "longitude": -80.93,
+  "generationtime_ms": 0.08,
+  "utc_offset_seconds": 0,
+  "timezone": "GMT",
+  "hourly_units": {
+    "time": "iso8601",
+    "wind_speed_10m": "m/s",
+    "wind_direction_10m": "°"
+  },
+  "hourly": {
+    "time": [
+      "2026-07-30T12:00",
+      "2026-07-30T14:00",
+      "2026-07-30T15:00"
+    ],
+    "wind_speed_10m": [3.0, 6.0, 7.0],
+    "wind_direction_10m": [265, 275, 280]
+  }
+}
