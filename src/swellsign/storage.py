@@ -23,11 +23,12 @@ from .models import (
     ForecastRun,
     RawFetch,
     Station,
+    TidePrediction,
     WaveObservation,
     WindObservation,
 )
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class StorageError(RuntimeError):
@@ -182,6 +183,28 @@ CREATE TABLE IF NOT EXISTS forecast_points (
     PRIMARY KEY(run_id, valid_at_utc)
 );
 
+CREATE TABLE IF NOT EXISTS tide_predictions (
+    id TEXT PRIMARY KEY,
+    station_id TEXT NOT NULL,
+    predicted_at_utc TEXT NOT NULL,
+    height_m REAL NOT NULL,
+    kind TEXT NOT NULL,
+    datum TEXT NOT NULL,
+    fetched_at_utc TEXT NOT NULL,
+    source_url TEXT NOT NULL,
+    raw_fetch_id TEXT NOT NULL REFERENCES raw_fetches(id),
+    UNIQUE(station_id, predicted_at_utc, kind, datum)
+);
+
+CREATE TABLE IF NOT EXISTS http_validators (
+    validator_key TEXT PRIMARY KEY,
+    etag TEXT,
+    last_modified TEXT,
+    updated_at_utc TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS tide_station_time
+    ON tide_predictions(station_id, predicted_at_utc);
 CREATE INDEX IF NOT EXISTS wave_station_time
     ON wave_observations(station_id, observed_at_utc DESC);
 CREATE INDEX IF NOT EXISTS wave_station_product_time
@@ -625,12 +648,133 @@ class SQLiteRepository:
             return None
         return self.forecast_response(runs[0].id, start=start, hours=hours)
 
+    def upsert_tide_predictions(self, predictions: Iterable[TidePrediction]) -> int:
+        """Store astronomical extremes idempotently.
+
+        Predictions for the same station, time, kind, and datum are stable, so
+        a repeated fetch simply refreshes provenance instead of duplicating.
+        """
+        rows = list(predictions)
+        if not rows:
+            return 0
+        with self._transaction() as connection:
+            for prediction in rows:
+                connection.execute(
+                    """
+                    INSERT INTO tide_predictions (
+                        id, station_id, predicted_at_utc, height_m, kind, datum,
+                        fetched_at_utc, source_url, raw_fetch_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(station_id, predicted_at_utc, kind, datum) DO UPDATE SET
+                        height_m = excluded.height_m,
+                        fetched_at_utc = excluded.fetched_at_utc,
+                        source_url = excluded.source_url,
+                        raw_fetch_id = excluded.raw_fetch_id
+                    """,
+                    (
+                        prediction.id,
+                        prediction.station_id,
+                        _utc_text(prediction.predicted_at),
+                        prediction.height_m,
+                        prediction.kind,
+                        prediction.datum,
+                        _utc_text(prediction.fetched_at),
+                        prediction.source_url,
+                        prediction.raw_fetch_id,
+                    ),
+                )
+        return len(rows)
+
+    def tide_predictions(
+        self,
+        station_id: str,
+        *,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        limit: int | None = None,
+    ) -> list[TidePrediction]:
+        clauses = ["station_id = ?"]
+        parameters: list[Any] = [station_id]
+        if start is not None:
+            clauses.append("predicted_at_utc >= ?")
+            parameters.append(_utc_text(start))
+        if end is not None:
+            clauses.append("predicted_at_utc <= ?")
+            parameters.append(_utc_text(end))
+        sql = (
+            "SELECT * FROM tide_predictions WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY predicted_at_utc"
+        )
+        if limit is not None:
+            sql += f" LIMIT {int(limit)}"
+        with self._connect() as connection:
+            rows = connection.execute(sql, parameters).fetchall()
+        return [_tide_from_row(row) for row in rows]
+
+    def surrounding_tide_extremes(
+        self,
+        station_id: str,
+        moment: datetime,
+    ) -> tuple[TidePrediction | None, TidePrediction | None]:
+        """Return the last extreme at or before ``moment`` and the next after it."""
+        moment_text = _utc_text(moment)
+        with self._connect() as connection:
+            previous_row = connection.execute(
+                """
+                SELECT * FROM tide_predictions
+                WHERE station_id = ? AND predicted_at_utc <= ?
+                ORDER BY predicted_at_utc DESC LIMIT 1
+                """,
+                (station_id, moment_text),
+            ).fetchone()
+            next_row = connection.execute(
+                """
+                SELECT * FROM tide_predictions
+                WHERE station_id = ? AND predicted_at_utc > ?
+                ORDER BY predicted_at_utc LIMIT 1
+                """,
+                (station_id, moment_text),
+            ).fetchone()
+        return (
+            _tide_from_row(previous_row) if previous_row is not None else None,
+            _tide_from_row(next_row) if next_row is not None else None,
+        )
+
+    def get_validator(self, key: str) -> tuple[str | None, str | None]:
+        """Read the stored ETag/Last-Modified pair for a conditional request."""
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT etag, last_modified FROM http_validators WHERE validator_key = ?",
+                (key,),
+            ).fetchone()
+        if row is None:
+            return (None, None)
+        return (row["etag"], row["last_modified"])
+
+    def set_validator(self, key: str, etag: str | None, last_modified: str | None) -> None:
+        if etag is None and last_modified is None:
+            return
+        with self._transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO http_validators (validator_key, etag, last_modified, updated_at_utc)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(validator_key) DO UPDATE SET
+                    etag = excluded.etag,
+                    last_modified = excluded.last_modified,
+                    updated_at_utc = excluded.updated_at_utc
+                """,
+                (key, etag, last_modified, _utc_text(datetime.now(UTC))),
+            )
+
     def counts(self) -> dict[str, int]:
         tables = (
             "raw_fetches",
             "stations",
             "wave_observations",
             "wind_observations",
+            "tide_predictions",
             "forecast_runs",
             "forecast_points",
         )
@@ -643,6 +787,20 @@ class SQLiteRepository:
 
 # A concise default name for callers that are not SQLite-specific.
 Repository = SQLiteRepository
+
+
+def _tide_from_row(row: sqlite3.Row) -> TidePrediction:
+    return TidePrediction(
+        id=row["id"],
+        station_id=row["station_id"],
+        predicted_at=_parse_utc(row["predicted_at_utc"]),
+        height_m=row["height_m"],
+        kind=row["kind"],
+        datum=row["datum"],
+        fetched_at=_parse_utc(row["fetched_at_utc"]),
+        source_url=row["source_url"],
+        raw_fetch_id=row["raw_fetch_id"],
+    )
 
 
 def _station_from_row(row: sqlite3.Row) -> Station:

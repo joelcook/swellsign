@@ -48,6 +48,21 @@ stations:
     expected_interval_minutes: 30
     capabilities: [waves, separated_swell]
     attribution: NOAA NDBC / CDIP
+  # Subordinate high/low prediction station. It publishes no live observed
+  # water level, so only the phase between adjacent extremes is derived, and
+  # it is always labeled a prediction. 8721164 is deliberately not used: it
+  # sits inside Mosquito Lagoon and its timing differs materially.
+  coops:8721147:
+    id: coops:8721147
+    provider: coops
+    provider_station_id: "8721147"
+    canonical_physical_station_id: "coops:8721147"
+    name: Ponce de Leon Inlet South
+    latitude: 29.0717
+    longitude: -80.9200
+    expected_interval_minutes: 720
+    capabilities: [tide_predictions]
+    attribution: NOAA CO-OPS
 
 spots:
   new-smyrna:
@@ -69,3 +84,9 @@ spots:
       - station_id: ndbc:41069
         role: primary
         maximum_usable_age_minutes: 360
+    tide_source:
+      station_id: coops:8721147
+      name: Ponce de Leon Inlet South
+      datum: MLLW
+      horizon_days: 3
+      collection_interval_minutes: 720

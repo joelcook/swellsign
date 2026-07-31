@@ -23,6 +23,7 @@ from .display.renderer import DisplayRenderer
 from .display.simulator import render_json_file
 from .services.collector import build_default_collection_service
 from .services.snapshot import SnapshotComposer
+from .services.tide import TideContextService
 from .storage import SQLiteRepository
 
 app = typer.Typer(
@@ -99,8 +100,12 @@ def collect_once(
         bool,
         typer.Option("--forecast/--no-forecast", help="Also archive a seven-day forecast run."),
     ] = False,
+    tide: Annotated[
+        bool,
+        typer.Option("--tide/--no-tide", help="Also archive CO-OPS high/low predictions."),
+    ] = False,
 ) -> None:
-    """Fetch current observation sources once, with optional forecast archive."""
+    """Fetch current observation sources once, with optional forecast and tide."""
     settings, product_config, repository = _runtime()
     _configure_logging(settings.log_level)
     service = build_default_collection_service(settings, product_config, repository)
@@ -109,14 +114,39 @@ def collect_once(
         results = [asdict(await service.collect_observations_once())]
         if forecast:
             results.append(asdict(await service.collect_forecast_once()))
+        if tide:
+            results.append(asdict(await service.collect_tide_once()))
         return results
 
     typer.echo(json.dumps(asyncio.run(run_once()), default=str, indent=2))
 
 
+@app.command("tide")
+def tide_context(
+    spot_id: Annotated[str, typer.Argument(help="Configured spot identifier.")] = "new-smyrna",
+) -> None:
+    """Print the derived tide phase. Always a prediction, never a measurement."""
+    _, product_config, repository = _runtime()
+    phase = TideContextService(repository, product_config).phase(spot_id)
+    if phase is None:
+        typer.echo(
+            json.dumps(
+                {
+                    "mode": "prediction",
+                    "spot_id": spot_id,
+                    "phase": None,
+                    "detail": "no pair of predicted extremes brackets this moment",
+                },
+                indent=2,
+            )
+        )
+        return
+    typer.echo(phase.model_dump_json(indent=2))
+
+
 @app.command("collector")
 def collector() -> None:
-    """Run observation and forecast collection on independent schedules."""
+    """Run observation, forecast, and tide collection on independent schedules."""
     settings, product_config, repository = _runtime()
     _configure_logging(settings.log_level)
     service = build_default_collection_service(settings, product_config, repository)

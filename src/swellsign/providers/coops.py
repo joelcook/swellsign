@@ -9,31 +9,15 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
-from typing import Literal
 from urllib.parse import parse_qs, urlparse
 
-from pydantic import field_validator
-
-from swellsign.models import RawFetch, StrictModel, require_utc
+from swellsign.models import RawFetch, TidePrediction
 
 from .base import HttpFetcher
 
 COOPS_API_URL = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
 
-
-class TidePrediction(StrictModel):
-    id: str
-    station_id: str
-    predicted_at: datetime
-    height_m: float
-    kind: Literal["high", "low"]
-    datum: str
-    fetched_at: datetime
-    source_url: str
-    raw_fetch_id: str
-
-    _utc_predicted = field_validator("predicted_at")(require_utc)
-    _utc_fetched = field_validator("fetched_at")(require_utc)
+__all__ = ["COOPS_API_URL", "CoopsProvider", "TidePrediction"]
 
 
 def _station_from_url(source_url: str) -> str | None:

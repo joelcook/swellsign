@@ -138,6 +138,41 @@ class WindObservation(ObservationBase):
     direction_deg_true: float | None = None
 
 
+class TidePrediction(StrictModel):
+    """One astronomical high or low water extreme.
+
+    Tide predictions are model output, not measurement.  They live in their own
+    model and table so they can never be mistaken for an observed water level
+    or reach a :class:`CurrentSnapshot`.
+    """
+
+    id: str
+    station_id: str
+    predicted_at: datetime
+    height_m: float
+    kind: Literal["high", "low"]
+    datum: str
+    fetched_at: datetime
+    source_url: str
+    raw_fetch_id: str
+
+    _utc_predicted = field_validator("predicted_at")(require_utc)
+    _utc_fetched = field_validator("fetched_at")(require_utc)
+
+
+class TidePhase(StrictModel):
+    """Derived phase between two adjacent predicted extremes."""
+
+    mode: Literal["prediction"] = "prediction"
+    station_id: str
+    state: Literal["rising", "falling"]
+    previous_extreme: TidePrediction
+    next_extreme: TidePrediction
+    minutes_to_next_extreme: int
+    percent_through: float = Field(ge=0.0, le=100.0)
+    datum: str
+
+
 class ForecastRun(StrictModel):
     id: str
     provider: str

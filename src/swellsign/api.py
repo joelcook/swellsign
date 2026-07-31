@@ -27,6 +27,7 @@ from .services.snapshot import (
     UnknownSpotError,
     compact_display_payload,
 )
+from .services.tide import TideContextService
 from .storage import SQLiteRepository
 
 Clock = Callable[[], datetime]
@@ -46,6 +47,7 @@ def create_app(
     resolved_config = product_config or get_product_config()
     resolved_repository = repository or SQLiteRepository(resolved_settings.database_path)
     resolved_composer = composer or SnapshotComposer(resolved_repository, resolved_config)
+    resolved_tide = TideContextService(resolved_repository, resolved_config)
     utc_clock = clock or (lambda: datetime.now(UTC))
 
     @asynccontextmanager
@@ -181,6 +183,47 @@ def create_app(
                 }
                 for source in spot.wind_sources
             ],
+            "tide": (
+                None
+                if spot.tide_source is None
+                else {
+                    **spot.tide_source.model_dump(mode="json"),
+                    "mode": "prediction",
+                    "station": resolved_config.stations.get(spot.tide_source.station_id),
+                }
+            ),
+        }
+
+    @application.get("/v1/spots/{spot_id}/tide")
+    def tide(
+        spot_id: str,
+        hours: Annotated[int, Query(ge=1, le=336)] = 48,
+    ) -> dict[str, Any]:
+        """Astronomical high/low context.
+
+        This is model output, and `mode` says so on every response. It is a
+        sibling of the forecast archive, never a component of `/now`.
+        """
+        spot = _spot_or_404(resolved_config, spot_id)
+        if spot.tide_source is None:
+            raise HTTPException(
+                status_code=404,
+                detail="no tide prediction source is configured for this spot",
+            )
+        now = _aware_utc(utc_clock())
+        extremes = resolved_repository.tide_predictions(
+            spot.tide_source.station_id,
+            start=now - timedelta(hours=6),
+            end=now + timedelta(hours=hours),
+        )
+        return {
+            "mode": "prediction",
+            "spot_id": spot_id,
+            "station_id": spot.tide_source.station_id,
+            "datum": spot.tide_source.datum,
+            "generated_at": now,
+            "phase": resolved_tide.phase(spot_id, now=now),
+            "extremes": extremes,
         }
 
     @application.get("/v1/stations")

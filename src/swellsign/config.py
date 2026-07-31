@@ -49,6 +49,21 @@ class WindSourceConfig(BaseModel):
     maximum_usable_age_minutes: int = 360
 
 
+class TideSourceConfig(BaseModel):
+    """Optional CO-OPS prediction context.
+
+    Tide is deliberately not part of the wave/wind source lists: it is model
+    output, it never participates in snapshot source selection, and it is not
+    required on the default sign face.
+    """
+
+    station_id: str
+    name: str | None = None
+    datum: str = "MLLW"
+    horizon_days: int = 3
+    collection_interval_minutes: int = 720
+
+
 class SpotConfig(BaseModel):
     name: str
     display_name: str
@@ -57,6 +72,7 @@ class SpotConfig(BaseModel):
     longitude: float
     wave_sources: list[WaveSourceConfig]
     wind_sources: list[WindSourceConfig]
+    tide_source: TideSourceConfig | None = None
 
 
 class ProductConfig(BaseModel):
@@ -65,6 +81,18 @@ class ProductConfig(BaseModel):
     forecast: ForecastConfig = Field(default_factory=ForecastConfig)
     stations: dict[str, Station]
     spots: dict[str, SpotConfig]
+
+    def station_interval_minutes(self, station_id: str, default_minutes: int) -> int:
+        """Poll cadence for one station.
+
+        A station that reports hourly gains nothing from a twenty-minute poll,
+        and NOAA gains nothing from serving it.
+        """
+        station = self.stations.get(station_id)
+        declared = station.expected_interval_minutes if station is not None else None
+        if declared is None or declared <= 0:
+            return default_minutes
+        return max(default_minutes, declared)
 
 
 class Settings(BaseSettings):

@@ -15,7 +15,7 @@ import tempfile
 from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -36,8 +36,11 @@ class CollectionResult:
     raw_fetches: int = 0
     wave_observations: int = 0
     wind_observations: int = 0
+    tide_predictions: int = 0
     forecast_runs: int = 0
     forecast_points: int = 0
+    unchanged: int = 0
+    skipped: int = 0
     errors: dict[str, str] = field(default_factory=dict)
 
     @property
@@ -53,6 +56,7 @@ class CollectionService:
         *,
         observation_providers: Mapping[str, Any] | None = None,
         forecast_provider: Any | None = None,
+        tide_provider: Any | None = None,
         snapshot_dir: Path | str | None = None,
         composer: SnapshotComposer | None = None,
     ) -> None:
@@ -60,14 +64,34 @@ class CollectionService:
         self.product_config = product_config
         self.observation_providers = dict(observation_providers or {})
         self.forecast_provider = forecast_provider
+        self.tide_provider = tide_provider
         self.snapshot_dir = Path(snapshot_dir) if snapshot_dir is not None else None
         self.composer = composer or SnapshotComposer(repository, product_config)
+        self._station_due: dict[str, datetime] = {}
 
-    async def collect_observations_once(self) -> CollectionResult:
+    def _station_is_due(self, station_id: str, now: datetime, default_minutes: int) -> bool:
+        due_at = self._station_due.get(station_id)
+        if due_at is not None and now < due_at:
+            return False
+        interval = self.product_config.station_interval_minutes(station_id, default_minutes)
+        self._station_due[station_id] = now + timedelta(minutes=interval)
+        return True
+
+    async def collect_observations_once(
+        self,
+        *,
+        respect_station_schedule: bool = False,
+        default_interval_minutes: int = 20,
+    ) -> CollectionResult:
         result = CollectionResult(started_at=datetime.now(UTC))
 
         for station in self.product_config.stations.values():
             if not {"waves", "wind", "separated_swell"}.intersection(station.capabilities):
+                continue
+            if respect_station_schedule and not self._station_is_due(
+                station.id, result.started_at, default_interval_minutes
+            ):
+                result.skipped += 1
                 continue
             provider = self.observation_providers.get(station.provider)
             if provider is None:
@@ -88,6 +112,11 @@ class CollectionService:
                     result.raw_fetches += 1
                     if raw.error is not None:
                         result.errors[resource_key] = _raw_error_summary(raw)
+                        continue
+                    if raw.http_status == 304:
+                        # The conditional request succeeded and the resource is
+                        # byte-identical; there is nothing new to normalize.
+                        result.unchanged += 1
                         continue
                     normalized = _normalize_observations(provider, raw, station.id)
                     wave_rows = [
@@ -129,6 +158,54 @@ class CollectionService:
                 except Exception as exc:
                     result.errors[f"snapshot:{spot_id}"] = f"{type(exc).__name__}: {exc}"
                     logger.exception("snapshot rebuild failed", extra={"spot_id": spot_id})
+
+        result.finished_at = datetime.now(UTC)
+        return result
+
+    async def collect_tide_once(self) -> CollectionResult:
+        """Archive astronomical extremes for every spot configuring a tide source.
+
+        Tide failures are isolated here for the same reason forecast failures
+        are: neither may degrade the measured `/now` path.
+        """
+        result = CollectionResult(started_at=datetime.now(UTC))
+        if self.tide_provider is None:
+            result.errors["tide"] = "no tide provider configured"
+            result.finished_at = datetime.now(UTC)
+            return result
+
+        for spot_id, spot in self.product_config.spots.items():
+            tide_source = spot.tide_source
+            if tide_source is None:
+                continue
+            try:
+                start = result.started_at - timedelta(days=1)
+                end = result.started_at + timedelta(days=tide_source.horizon_days)
+                raw = await self.tide_provider.fetch_high_low(
+                    tide_source.station_id,
+                    start,
+                    end,
+                )
+                self.repository.save_raw_fetch(raw)
+                result.raw_fetches += 1
+                if raw.error is not None:
+                    result.errors[f"tide:{spot_id}"] = _raw_error_summary(raw)
+                    continue
+                if raw.http_status == 304:
+                    result.unchanged += 1
+                    continue
+                predictions = self.tide_provider.normalize_high_low(
+                    raw,
+                    tide_source.station_id,
+                )
+                result.tide_predictions += self.repository.upsert_tide_predictions(predictions)
+                logger.info(
+                    "tide predictions collected",
+                    extra={"spot_id": spot_id, "rows": len(predictions)},
+                )
+            except Exception as exc:
+                result.errors[f"tide:{spot_id}"] = f"{type(exc).__name__}: {exc}"
+                logger.exception("tide source failed", extra={"spot_id": spot_id})
 
         result.finished_at = datetime.now(UTC)
         return result
@@ -182,21 +259,42 @@ class CollectionService:
         loop = asyncio.get_running_loop()
         next_observation = loop.time()
         next_forecast = loop.time()
+        next_tide = loop.time()
         forecast_interval_seconds = self.product_config.forecast.collection_interval_minutes * 60
         observation_interval_seconds = observation_interval_minutes * 60
+        tide_interval_seconds = self._tide_interval_minutes() * 60
 
         while not stop.is_set():
             monotonic_now = loop.time()
             if monotonic_now >= next_observation:
-                await self.collect_observations_once()
+                # The tick is the fastest configured cadence; each station is
+                # then gated by its own reporting interval.
+                await self.collect_observations_once(
+                    respect_station_schedule=True,
+                    default_interval_minutes=observation_interval_minutes,
+                )
                 next_observation = monotonic_now + observation_interval_seconds
             if monotonic_now >= next_forecast:
                 await self.collect_forecast_once()
                 next_forecast = monotonic_now + forecast_interval_seconds
+            if self.tide_provider is not None and monotonic_now >= next_tide:
+                await self.collect_tide_once()
+                next_tide = monotonic_now + tide_interval_seconds
 
-            delay = max(0.1, min(next_observation, next_forecast) - loop.time())
+            due = [next_observation, next_forecast]
+            if self.tide_provider is not None:
+                due.append(next_tide)
+            delay = max(0.1, min(due) - loop.time())
             with suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=min(delay, 30))
+
+    def _tide_interval_minutes(self) -> int:
+        intervals = [
+            spot.tide_source.collection_interval_minutes
+            for spot in self.product_config.spots.values()
+            if spot.tide_source is not None
+        ]
+        return min(intervals) if intervals else 720
 
 
 def build_default_collection_service(
@@ -206,23 +304,36 @@ def build_default_collection_service(
 ) -> CollectionService:
     """Construct built-in providers without coupling imports to module startup."""
 
+    from ..providers.base import HttpFetcher
+
+    # One fetcher shares the repository-backed validator store so every
+    # provider issues conditional requests and retries on the same policy.
+    fetcher = HttpFetcher(validator_store=repository)
+
     observation_providers: dict[str, Any] = {}
     if any(station.provider == "ndbc" for station in product_config.stations.values()):
         from ..providers.ndbc import NdbcProvider
 
-        observation_providers["ndbc"] = NdbcProvider()
+        observation_providers["ndbc"] = NdbcProvider(fetcher)
 
     forecast_provider: Any | None = None
     if product_config.forecast.provider == "open_meteo":
         from ..providers.open_meteo import OpenMeteoProvider
 
-        forecast_provider = OpenMeteoProvider()
+        forecast_provider = OpenMeteoProvider(fetcher)
+
+    tide_provider: Any | None = None
+    if any(spot.tide_source is not None for spot in product_config.spots.values()):
+        from ..providers.coops import CoopsProvider
+
+        tide_provider = CoopsProvider(fetcher)
 
     return CollectionService(
         repository,
         product_config,
         observation_providers=observation_providers,
         forecast_provider=forecast_provider,
+        tide_provider=tide_provider,
         snapshot_dir=settings.snapshot_dir,
     )
 
