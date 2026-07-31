@@ -8,6 +8,7 @@ import json
 import logging
 import signal
 import time
+import webbrowser
 from contextlib import suppress
 from dataclasses import asdict
 from datetime import datetime
@@ -21,9 +22,8 @@ from .config import get_product_config, get_settings
 from .display.client import DisplayClient, recalculate_ages
 from .display.hub75 import PiMatrixOutput
 from .display.palette import BrightnessController, BrightnessSchedule
-from .display.renderer import DisplayRenderer
+from .display.renderer import DisplayRenderer, animation_phase
 from .display.simulator import render_json_file
-from .models import CompactDisplayPayload
 from .services.collector import build_default_collection_service
 from .services.snapshot import SnapshotComposer
 from .services.tide import TideContextService
@@ -78,26 +78,6 @@ class _CollectorLock:
             fcntl.flock(self.handle.fileno(), fcntl.LOCK_UN)
             self.handle.close()
             self.handle = None
-
-
-def _animation_phase(
-    payload: CompactDisplayPayload,
-    started_monotonic: float,
-    *,
-    motion: bool,
-) -> float | None:
-    """Position within one dominant-period cycle, or ``None`` for no motion.
-
-    The mark is decorative and nonsemantic: it never implies phase-accurate
-    ocean motion. The renderer additionally suppresses it unless the wave
-    component is fresh.
-    """
-    if not motion or payload.wave is None:
-        return None
-    period = payload.wave.period_s
-    if not period or period <= 0:
-        return None
-    return ((time.monotonic() - started_monotonic) % period) / period
 
 
 @app.command("init-db")
@@ -252,6 +232,51 @@ def render_preview(
     typer.echo(str(rendered))
 
 
+@app.command("simulate")
+def simulate(
+    host: Annotated[str, typer.Option(help="Bind host for the simulator page.")] = "127.0.0.1",
+    port: Annotated[int, typer.Option(min=1, max=65535)] = 8100,
+    api_url: Annotated[
+        str | None,
+        typer.Option(help="Display endpoint to add a live state; fixtures work without it."),
+    ] = None,
+    open_browser: Annotated[bool, typer.Option("--open/--no-open")] = True,
+) -> None:
+    """Serve the browser panel for the 128x32 face.
+
+    Frames come from the same renderer that drives the Pi, so the page is an
+    output adapter rather than a second implementation of the layout.
+    """
+    from .display.web import create_simulator_app
+
+    settings = get_settings()
+    _configure_logging(settings.log_level)
+    url = f"http://{host}:{port}/"
+    typer.echo(f"Swell Sign simulator on {url}")
+    if api_url:
+        typer.echo(f"Live state polls {api_url}")
+    if open_browser:
+        with suppress(Exception):
+            webbrowser.open(url)
+    uvicorn.run(
+        create_simulator_app(api_url=api_url),
+        host=host,
+        port=port,
+        log_level="warning",
+    )
+
+
+@app.command("write-state-fixtures")
+def write_state_fixtures_command(
+    directory: Annotated[Path, typer.Argument()] = Path("examples/states"),
+) -> None:
+    """Write every simulator state to JSON for golden-image and review work."""
+    from .display.web import write_state_fixtures
+
+    written = write_state_fixtures(directory)
+    typer.echo(json.dumps([str(path) for path in written], indent=2))
+
+
 @app.command("display")
 def display(
     api_url: Annotated[
@@ -317,7 +342,11 @@ def display(
                     renderer.render(
                         frame_payload,
                         offline=client.offline,
-                        animation_phase=_animation_phase(frame_payload, started, motion=motion),
+                        animation_phase=animation_phase(
+                            frame_payload,
+                            time.monotonic() - started,
+                            motion=motion,
+                        ),
                     )
                 )
 

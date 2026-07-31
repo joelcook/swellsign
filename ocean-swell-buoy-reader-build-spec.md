@@ -1222,7 +1222,9 @@ swellsign/
 |       |-- hub75.py
 |       |-- palette.py
 |       |-- renderer.py
-|       `-- simulator.py
+|       |-- simulator.py
+|       |-- simulator.html
+|       `-- web.py
 |-- firmware/
 |   `-- matrixportal/
 |       |-- code.py
@@ -1380,6 +1382,9 @@ It must:
 - Consume the same compact payload as the physical sign.
 - Render an exact `128×32` PNG.
 - Optionally render a nearest-neighbor enlarged preview.
+- Offer a browser panel that receives rendered pixels rather than
+  reimplementing the layout, so no client can become a second source of truth
+  about what the sign shows.
 - Load only bundled bitmap fonts.
 - Support fresh, delayed, stale, fallback, partial, offline, and no-data fixtures.
 - Match Pi output for the same payload.

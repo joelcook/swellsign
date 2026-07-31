@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Swell Sign simulator</title>
+<style>
+  :root {
+    --bg: #0b0d0e;
+    --panel: #141719;
+    --line: #23282b;
+    --text: #b9c2c4;
+    --muted: #6d787c;
+    --glass: #238e87;
+    --warm: #a19274;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  h1 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--glass);
+  }
+  header p { margin: 6px 0 0; color: var(--muted); max-width: 68ch; }
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 24px;
+    padding: 24px;
+    align-items: start;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+
+  /* The enclosure: dark wood or black metal, shallow shadow gap from the wall,
+     one continuous smoked acrylic face across both panels. */
+  .stage { overflow-x: auto; padding-bottom: 8px; }
+  .enclosure {
+    position: relative;
+    display: inline-block;
+    padding: 18px;
+    border-radius: 10px;
+    background: linear-gradient(160deg, #1b1e20, #0e1011 60%);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.04) inset,
+      0 18px 40px -12px rgba(0, 0, 0, 0.9),
+      0 2px 8px rgba(0, 0, 0, 0.6);
+  }
+  .face { position: relative; line-height: 0; border-radius: 3px; overflow: hidden; }
+  .face canvas { display: block; }
+  #bloom {
+    position: absolute;
+    inset: 0;
+    filter: blur(6px);
+    opacity: 0.55;
+    mix-blend-mode: screen;
+    pointer-events: none;
+  }
+  /* Smoked acrylic: a faint sheen, never enough to wash out the numbers. */
+  .acrylic {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      118deg,
+      rgba(255, 255, 255, 0.055) 0%,
+      rgba(255, 255, 255, 0.012) 22%,
+      rgba(255, 255, 255, 0) 46%
+    );
+  }
+  .off .acrylic { background: rgba(0, 0, 0, 0.35); }
+
+  aside { display: flex; flex-direction: column; gap: 18px; }
+  fieldset {
+    margin: 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px;
+    background: var(--panel);
+  }
+  legend {
+    padding: 0 6px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  label { display: block; margin-bottom: 10px; }
+  label:last-child { margin-bottom: 0; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  select, input[type="range"], button {
+    font: inherit;
+    color: var(--text);
+    background: #0d0f10;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+  }
+  select { width: 100%; padding: 6px 8px; }
+  input[type="range"] { width: 100%; accent-color: var(--glass); padding: 0; }
+  button { padding: 6px 10px; cursor: pointer; }
+  button:hover { border-color: var(--glass); color: var(--glass); }
+  button[aria-pressed="true"] { border-color: var(--glass); color: var(--glass); }
+  .scales { display: flex; gap: 6px; flex-wrap: wrap; }
+  .value { color: var(--warm); font-variant-numeric: tabular-nums; }
+  .hint { color: var(--muted); font-size: 11px; margin: 8px 0 0; }
+  pre {
+    margin: 0;
+    padding: 12px;
+    background: #0d0f10;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: auto;
+    max-height: 300px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .stat { display: flex; justify-content: space-between; color: var(--muted); }
+  .stat span:last-child { color: var(--warm); font-variant-numeric: tabular-nums; }
+  .error { color: #d1594e; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Swell Sign &middot; 128&times;32 simulator</h1>
+  <p>
+    Every frame is rendered by the Python <code>DisplayRenderer</code> and sent here as raw
+    pixels, so this cannot drift from the physical sign. Colors are perceptual and carry no
+    panel gamma, because your monitor already applies that curve.
+  </p>
+</header>
+
+<main>
+  <div class="stage">
+    <div class="enclosure" id="enclosure">
+      <div class="face" id="face">
+        <canvas id="panel"></canvas>
+        <canvas id="bloom"></canvas>
+        <div class="acrylic"></div>
+      </div>
+    </div>
+    <p class="hint" id="sizeHint"></p>
+  </div>
+
+  <aside>
+    <fieldset>
+      <legend>Data state</legend>
+      <label>
+        <select id="state"></select>
+      </label>
+      <p class="hint" id="stateHint"></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Brightness</legend>
+      <label class="row">
+        <span>Schedule</span>
+        <button id="scheduleToggle" aria-pressed="true">on</button>
+      </label>
+      <label id="hourRow">
+        <div class="row"><span>Local hour</span><span class="value" id="hourValue"></span></div>
+        <input type="range" id="hour" min="0" max="23" step="1" value="13" />
+      </label>
+      <label id="manualRow" hidden>
+        <div class="row"><span>Level</span><span class="value" id="manualValue"></span></div>
+        <input type="range" id="manual" min="0" max="1" step="0.01" value="0.55" />
+      </label>
+      <p class="hint" id="brightnessHint"></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Panel</legend>
+      <label class="row">
+        <span>Motion</span>
+        <button id="motionToggle" aria-pressed="true">on</button>
+      </label>
+      <label>
+        <div class="row"><span>Scale</span><span class="value" id="scaleValue"></span></div>
+        <div class="scales">
+          <button data-scale="1">1&times;</button>
+          <button data-scale="4">4&times;</button>
+          <button data-scale="6">6&times;</button>
+          <button data-scale="10">10&times;</button>
+          <button data-scale="physical">Physical</button>
+        </div>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Frame</legend>
+      <div class="stat"><span>Rendered</span><span id="fps">&mdash;</span></div>
+      <div class="stat"><span>Brightness</span><span id="activeBrightness">&mdash;</span></div>
+      <div class="stat"><span>Crest phase</span><span id="phase">&mdash;</span></div>
+      <p class="hint error" id="error" hidden></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Payload</legend>
+      <pre id="payload">loading</pre>
+    </fieldset>
+  </aside>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  const WIDTH = 128;
+  const HEIGHT = 32;
+  const TARGET_FPS = 20;
+  // A P4 panel is 4mm pitch, so 128 columns span 512mm, almost exactly 20in.
+  const PHYSICAL_INCHES_WIDE = 20.16;
+
+  const panel = document.getElementById("panel");
+  const bloom = document.getElementById("bloom");
+  const panelCtx = panel.getContext("2d");
+  const bloomCtx = bloom.getContext("2d");
+
+  const els = {
+    state: document.getElementById("state"),
+    stateHint: document.getElementById("stateHint"),
+    scheduleToggle: document.getElementById("scheduleToggle"),
+    motionToggle: document.getElementById("motionToggle"),
+    hour: document.getElementById("hour"),
+    hourRow: document.getElementById("hourRow"),
+    hourValue: document.getElementById("hourValue"),
+    manual: document.getElementById("manual"),
+    manualRow: document.getElementById("manualRow"),
+    manualValue: document.getElementById("manualValue"),
+    brightnessHint: document.getElementById("brightnessHint"),
+    scaleValue: document.getElementById("scaleValue"),
+    sizeHint: document.getElementById("sizeHint"),
+    fps: document.getElementById("fps"),
+    activeBrightness: document.getElementById("activeBrightness"),
+    phase: document.getElementById("phase"),
+    payload: document.getElementById("payload"),
+    error: document.getElementById("error"),
+    face: document.getElementById("face"),
+  };
+
+  const ui = {
+    state: "fresh",
+    schedule: true,
+    motion: true,
+    hour: 13,
+    manual: 0.55,
+    scale: 6,
+    states: [],
+    config: null,
+  };
+
+  let started = performance.now();
+  let inFlight = false;
+  let lastFrameAt = 0;
+  let smoothedFps = 0;
+
+  function scheduledLevel(hour) {
+    const s = ui.config.schedule;
+    if (hour >= s.day_start_hour && hour < s.evening_start_hour) return s.day;
+    if (hour >= s.evening_start_hour && hour < s.night_start_hour) return s.evening;
+    return s.night;
+  }
+
+  function activeBrightness() {
+    return ui.schedule ? scheduledLevel(ui.hour) : ui.manual;
+  }
+
+  function cellSize() {
+    if (ui.scale !== "physical") return ui.scale;
+    // 96 CSS pixels per inch is the spec value; real monitors vary, which the
+    // hint below says out loud rather than pretending this is exact.
+    return (PHYSICAL_INCHES_WIDE * 96) / WIDTH;
+  }
+
+  function resize() {
+    const cell = cellSize();
+    const dpr = window.devicePixelRatio || 1;
+    const cssWidth = WIDTH * cell;
+    const cssHeight = HEIGHT * cell;
+    for (const canvas of [panel, bloom]) {
+      canvas.width = Math.round(cssWidth * dpr);
+      canvas.height = Math.round(cssHeight * dpr);
+      canvas.style.width = cssWidth + "px";
+      canvas.style.height = cssHeight + "px";
+    }
+    panelCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    bloomCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    els.scaleValue.textContent = ui.scale === "physical" ? "physical" : ui.scale + "×";
+    const inches = (WIDTH * cell) / 96;
+    els.sizeHint.textContent =
+      `Face is ${inches.toFixed(1)}in × ${((HEIGHT * cell) / 96).toFixed(1)}in at 96 CSS ppi. ` +
+      `Your monitor's real pitch may differ, so treat physical mode as close, not exact. ` +
+      `Step back to reading distance before judging legibility.`;
+  }
+
+  function paint(bytes) {
+    const cell = cellSize();
+    const gap = cell >= 4 ? Math.max(1, cell * 0.16) : 0;
+    const dot = cell - gap;
+    const radius = dot / 2;
+
+    panelCtx.fillStyle = "#000";
+    panelCtx.fillRect(0, 0, WIDTH * cell, HEIGHT * cell);
+
+    // Unlit emitters are not truly black on a real panel; a faint grid keeps
+    // the face from looking like a printed page.
+    if (cell >= 4) {
+      panelCtx.fillStyle = "rgba(255,255,255,0.022)";
+      for (let y = 0; y < HEIGHT; y++) {
+        for (let x = 0; x < WIDTH; x++) {
+          panelCtx.beginPath();
+          panelCtx.arc(x * cell + cell / 2, y * cell + cell / 2, Math.max(0.5, radius * 0.5), 0, 6.2832);
+          panelCtx.fill();
+        }
+      }
+    }
+
+    for (let y = 0; y < HEIGHT; y++) {
+      for (let x = 0; x < WIDTH; x++) {
+        const i = (y * WIDTH + x) * 3;
+        const r = bytes[i], g = bytes[i + 1], b = bytes[i + 2];
+        if (r === 0 && g === 0 && b === 0) continue;
+        panelCtx.fillStyle = `rgb(${r},${g},${b})`;
+        if (cell < 3) {
+          panelCtx.fillRect(x * cell, y * cell, cell, cell);
+        } else {
+          panelCtx.beginPath();
+          panelCtx.arc(x * cell + cell / 2, y * cell + cell / 2, radius, 0, 6.2832);
+          panelCtx.fill();
+        }
+      }
+    }
+
+    // Bloom is the same frame, blurred by CSS and screened back over itself.
+    bloomCtx.clearRect(0, 0, WIDTH * cell, HEIGHT * cell);
+    bloomCtx.drawImage(panel, 0, 0, WIDTH * cell, HEIGHT * cell);
+  }
+
+  function showError(message) {
+    els.error.hidden = !message;
+    els.error.textContent = message || "";
+  }
+
+  async function loadPayload() {
+    try {
+      const response = await fetch(`api/payload?state=${encodeURIComponent(ui.state)}`);
+      if (!response.ok) throw new Error(`payload ${response.status}`);
+      const body = await response.json();
+      els.payload.textContent = JSON.stringify(body.payload, null, 2);
+    } catch (error) {
+      els.payload.textContent = String(error);
+    }
+  }
+
+  async function tick(now) {
+    requestAnimationFrame(tick);
+    if (inFlight || now - lastFrameAt < 1000 / TARGET_FPS) return;
+    lastFrameAt = now;
+    inFlight = true;
+
+    const elapsed = (now - started) / 1000;
+    const brightness = activeBrightness();
+    const params = new URLSearchParams({
+      state: ui.state,
+      elapsed: elapsed.toFixed(3),
+      brightness: brightness.toFixed(3),
+      motion: ui.motion ? "true" : "false",
+    });
+
+    try {
+      const response = await fetch("api/frame?" + params.toString());
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.detail || `frame ${response.status}`);
+      }
+      paint(new Uint8Array(await response.arrayBuffer()));
+      showError("");
+
+      const instant = 1000 / Math.max(1, performance.now() - now);
+      smoothedFps = smoothedFps ? smoothedFps * 0.9 + instant * 0.1 : instant;
+      els.fps.textContent = Math.min(TARGET_FPS, Math.round(smoothedFps)) + " fps";
+      els.activeBrightness.textContent = brightness.toFixed(2);
+      els.face.classList.toggle("off", ui.state === "offline");
+    } catch (error) {
+      showError(String(error.message || error));
+    } finally {
+      inFlight = false;
+    }
+  }
+
+  function syncBrightnessUi() {
+    els.scheduleToggle.setAttribute("aria-pressed", String(ui.schedule));
+    els.scheduleToggle.textContent = ui.schedule ? "on" : "off";
+    els.hourRow.hidden = !ui.schedule;
+    els.manualRow.hidden = ui.schedule;
+    els.hourValue.textContent = String(ui.hour).padStart(2, "0") + ":00";
+    els.manualValue.textContent = ui.manual.toFixed(2);
+
+    const s = ui.config.schedule;
+    els.brightnessHint.textContent = ui.schedule
+      ? `Day ${s.day} from ${s.day_start_hour}:00, evening ${s.evening} from ` +
+        `${s.evening_start_hour}:00, night ${s.night} from ${s.night_start_hour}:00. ` +
+        `The real client eases between levels over about a second.`
+      : `Levels are perceptual. Below about 0.25 every channel floors to 1 on the ` +
+        `panel and sea glass turns grey, so the sign loses color before brightness.`;
+  }
+
+  async function boot() {
+    const response = await fetch("api/states");
+    ui.config = await response.json();
+    ui.states = ui.config.states.slice();
+    if (ui.config.live_available) {
+      ui.states.unshift({ id: "live", label: "Live observation from the API" });
+      ui.state = "live";
+    }
+    for (const item of ui.states) {
+      const option = document.createElement("option");
+      option.value = item.id;
+      option.textContent = item.label;
+      els.state.appendChild(option);
+    }
+    els.state.value = ui.state;
+    els.stateHint.textContent = ui.config.live_available
+      ? `Live polls ${ui.config.api_url}`
+      : "Start with --api-url to add a live state.";
+
+    els.state.addEventListener("change", () => {
+      ui.state = els.state.value;
+      started = performance.now();
+      loadPayload();
+    });
+    els.scheduleToggle.addEventListener("click", () => {
+      ui.schedule = !ui.schedule;
+      syncBrightnessUi();
+    });
+    els.motionToggle.addEventListener("click", () => {
+      ui.motion = !ui.motion;
+      els.motionToggle.setAttribute("aria-pressed", String(ui.motion));
+      els.motionToggle.textContent = ui.motion ? "on" : "off";
+    });
+    els.hour.addEventListener("input", () => {
+      ui.hour = Number(els.hour.value);
+      syncBrightnessUi();
+    });
+    els.manual.addEventListener("input", () => {
+      ui.manual = Number(els.manual.value);
+      syncBrightnessUi();
+    });
+    for (const button of document.querySelectorAll("[data-scale]")) {
+      button.addEventListener("click", () => {
+        const raw = button.dataset.scale;
+        ui.scale = raw === "physical" ? "physical" : Number(raw);
+        for (const other of document.querySelectorAll("[data-scale]")) {
+          other.setAttribute("aria-pressed", String(other === button));
+        }
+        resize();
+      });
+    }
+
+    ui.hour = new Date().getHours();
+    els.hour.value = String(ui.hour);
+    document.querySelector('[data-scale="6"]').setAttribute("aria-pressed", "true");
+
+    syncBrightnessUi();
+    resize();
+    await loadPayload();
+    requestAnimationFrame(tick);
+
+    setInterval(() => {
+      // The live payload changes upstream; fixtures only change on selection.
+      if (ui.state === "live") loadPayload();
+    }, 15000);
+  }
+
+  window.addEventListener("resize", resize);
+  boot().catch((error) => showError(String(error)));
+})();
+</script>
+</body>
+</html>

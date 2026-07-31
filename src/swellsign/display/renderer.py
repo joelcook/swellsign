@@ -217,3 +217,23 @@ def render_payload(
     offline: bool = False,
 ) -> Image.Image:
     return DisplayRenderer(brightness=brightness).render(payload, now=now, offline=offline)
+
+
+def animation_phase(
+    payload: CompactDisplayPayload,
+    elapsed_seconds: float,
+    *,
+    motion: bool = True,
+) -> float | None:
+    """Position within one dominant-period cycle, or ``None`` for no motion.
+
+    Shared by every display client so the Pi, the browser simulator, and any
+    future output stay on one definition of the crest's pace. The mark is
+    decorative: it never implies phase-accurate ocean motion.
+    """
+    if not motion or payload.wave is None:
+        return None
+    period = payload.wave.period_s
+    if not period or period <= 0:
+        return None
+    return (elapsed_seconds % period) / period

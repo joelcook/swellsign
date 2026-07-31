@@ -86,6 +86,30 @@ deliberately low saturation: sea-glass cyan for water, warm white for labels,
 muted amber for wind/data delay, and restrained red only for unavailable data.
 Color never means “good” or “bad” surf.
 
+### Browser panel
+
+```bash
+swellsign simulate
+swellsign simulate --api-url http://127.0.0.1:8000/v1/spots/new-smyrna/display
+```
+
+This serves a page at `http://127.0.0.1:8100/` that shows the sign as an object:
+individual emitters, bloom, smoked-acrylic sheen, and a dark enclosure, with
+live controls for all fourteen data states, the brightness schedule across a
+24-hour scrub, motion, and scale up to approximate physical size.
+
+The browser is an output adapter, not a second renderer. Python renders every
+frame with the real `DisplayRenderer` and ships raw pixels, so the page is
+byte-identical to what the Pi draws. A JavaScript reimplementation of the
+layout would be a second source of truth and would quietly break the simulator
+contract. Passing `--api-url` adds a live state driven by real buoy data.
+
+To dump every state as JSON for golden-image work:
+
+```bash
+swellsign write-state-fixtures examples/states
+```
+
 ## Brightness, gamma, and motion
 
 The sign is meant to be barely present at night, so the display client runs
