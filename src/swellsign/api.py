@@ -115,7 +115,7 @@ def create_app(
     )
     def display(spot_id: str) -> CompactDisplayPayload:
         snapshot = _compose_or_404(resolved_composer, spot_id, utc_clock())
-        return compact_display_payload(snapshot)
+        return compact_display_payload(snapshot, resolved_config)
 
     @application.get("/v1/spots/{spot_id}/history")
     def history(

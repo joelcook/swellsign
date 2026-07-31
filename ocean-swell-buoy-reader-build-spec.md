@@ -847,6 +847,36 @@ over 360 minutes  unavailable
 
 Allow station-specific overrides because reporting cadence varies.
 
+These global numbers are a fallback, not the operating values. A provider
+stamps an observation with its measurement time and publishes it later, so for
+a station reporting every 60 minutes the newest available observation sweeps
+across a full hour of age. Verified against `41070`: 200 consecutive
+observations exactly 60 minutes apart, with the newest routinely older than 90
+minutes. A fixed 90-minute limit therefore reports `DELAYED` during completely
+normal operation, which trains the owner to ignore the one word that is
+supposed to mean something.
+
+Effective thresholds are resolved per station in this order:
+
+```text
+1. An explicit per-station override.
+2. Derivation from the station's expected_interval_minutes:
+   fresh   = 2.5 x interval
+   delayed = 4.0 x interval
+   stale   = 7.0 x interval
+3. The global defaults above.
+```
+
+`DELAYED` then means a report was genuinely missed. A faster station gets a
+tighter window rather than inheriting a slow station's patience: hourly `41070`
+resolves to `150/240/420`, while the half-hourly `41113` fallback resolves to
+`75/120/210`.
+
+Because thresholds vary by station and the compact display payload carries no
+station identity, each component in that payload states the limits it was
+classified against. Without them an offline sign would have to guess which
+limits applied while recalculating its own age.
+
 Top-level `data_state` is the least-fresh required available component:
 
 ```text

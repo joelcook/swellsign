@@ -1,7 +1,27 @@
+# A single global threshold cannot be honest across stations. NDBC stamps an
+# observation with its measurement time and publishes it later, so with hourly
+# reporting the newest available observation sweeps across a full hour of age.
+# At 90 minutes the sign said DELAYED every hour while the buoy was working
+# perfectly, which teaches you to ignore the one word meant to signal trouble.
+#
+# Thresholds are therefore derived from each station's expected_interval_minutes
+# below, so DELAYED means a report was actually missed. Hourly 41070 resolves to
+# 150/240/420; the half-hourly 41113 fallback correctly gets a tighter
+# 75/120/210. The values here remain the fallback for stations that declare no
+# interval, and a station listed under `stations` overrides everything.
 freshness:
   fresh_max_age_minutes: 90
   delayed_max_age_minutes: 180
   stale_max_age_minutes: 360
+
+  derive_from_reporting_interval: true
+  fresh_interval_multiplier: 2.5
+  delayed_interval_multiplier: 4.0
+  stale_interval_multiplier: 7.0
+
+  # Explicit per-station overrides win over derivation. Any field left out is
+  # still derived, so you can pin just one edge of the ladder.
+  stations: {}
 
 trend:
   window_hours: 6

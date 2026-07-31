@@ -282,6 +282,20 @@ class CurrentSnapshot(StrictModel):
     _utc_generated = field_validator("generated_at")(require_utc)
 
 
+class FreshnessLimits(StrictModel):
+    """The thresholds this component was classified against.
+
+    Sent with each component so an offline display client can keep classifying
+    correctly on its own. Thresholds vary by station, and the compact payload
+    deliberately carries no station identity, so without these the sign would
+    have to guess which limits applied.
+    """
+
+    fresh_max_age_minutes: int
+    delayed_max_age_minutes: int
+    stale_max_age_minutes: int
+
+
 class CompactWave(StrictModel):
     label: str
     height_ft: float
@@ -291,6 +305,7 @@ class CompactWave(StrictModel):
     age_minutes: int
     freshness: Freshness
     trend: TrendState = TrendState.UNKNOWN
+    limits: FreshnessLimits | None = None
 
     _utc_observed = field_validator("observed_at")(require_utc)
 
@@ -301,6 +316,7 @@ class CompactWind(StrictModel):
     observed_at: datetime
     age_minutes: int
     freshness: Freshness
+    limits: FreshnessLimits | None = None
 
     _utc_observed = field_validator("observed_at")(require_utc)
 

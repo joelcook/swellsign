@@ -23,21 +23,38 @@ def recalculate_ages(
     freshness: FreshnessConfig | None = None,
 ) -> CompactDisplayPayload:
     current = (now or datetime.now(UTC)).astimezone(UTC)
-    thresholds = freshness or FreshnessConfig()
+    fallback = freshness or FreshnessConfig()
     updated = payload.model_copy(deep=True)
+
+    def thresholds_for(component) -> FreshnessConfig:
+        # The server states the limits each component was judged against, since
+        # they vary by station and the compact payload carries no station id.
+        if component.limits is None:
+            return fallback
+        return FreshnessConfig(
+            fresh_max_age_minutes=component.limits.fresh_max_age_minutes,
+            delayed_max_age_minutes=component.limits.delayed_max_age_minutes,
+            stale_max_age_minutes=component.limits.stale_max_age_minutes,
+            derive_from_reporting_interval=False,
+        )
+
     wave_state = None
     wind_state = None
     if updated.wave:
         updated.wave.age_minutes = max(
             0, int((current - updated.wave.observed_at).total_seconds() // 60)
         )
-        updated.wave.freshness = classify_freshness(updated.wave.age_minutes, thresholds)
+        updated.wave.freshness = classify_freshness(
+            updated.wave.age_minutes, thresholds_for(updated.wave)
+        )
         wave_state = updated.wave.freshness
     if updated.wind:
         updated.wind.age_minutes = max(
             0, int((current - updated.wind.observed_at).total_seconds() // 60)
         )
-        updated.wind.freshness = classify_freshness(updated.wind.age_minutes, thresholds)
+        updated.wind.freshness = classify_freshness(
+            updated.wind.age_minutes, thresholds_for(updated.wind)
+        )
         wind_state = updated.wind.freshness
     updated.data_state = aggregate_data_state(wave_state, wind_state)
     return updated

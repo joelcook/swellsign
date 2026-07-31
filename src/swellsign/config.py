@@ -6,16 +6,60 @@ from functools import lru_cache
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .models import MeasurementBasis, SourceRole, Station
 
 
+class FreshnessOverride(BaseModel):
+    """Explicit thresholds for one station. Any field left unset is derived."""
+
+    fresh_max_age_minutes: int | None = None
+    delayed_max_age_minutes: int | None = None
+    stale_max_age_minutes: int | None = None
+
+
 class FreshnessConfig(BaseModel):
+    """How old an observation may be before the sign says so.
+
+    A single global threshold cannot be honest across stations. NDBC 41070
+    stamps an observation with its measurement time and publishes it later, so
+    with hourly reporting the newest available observation sweeps across a full
+    hour of age. A 90 minute limit therefore reports DELAYED every hour while
+    the buoy is working perfectly, which teaches the owner to ignore the one
+    word that is supposed to mean something.
+
+    Thresholds are therefore derived from each station's reporting interval by
+    default, and an explicit per-station entry always wins.
+    """
+
     fresh_max_age_minutes: int = 90
     delayed_max_age_minutes: int = 180
     stale_max_age_minutes: int = 360
+
+    derive_from_reporting_interval: bool = True
+    fresh_interval_multiplier: float = 2.5
+    delayed_interval_multiplier: float = 4.0
+    stale_interval_multiplier: float = 7.0
+
+    stations: dict[str, FreshnessOverride] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _thresholds_ascend(self) -> FreshnessConfig:
+        if not (
+            self.fresh_max_age_minutes
+            <= self.delayed_max_age_minutes
+            <= self.stale_max_age_minutes
+        ):
+            raise ValueError("freshness thresholds must ascend: fresh <= delayed <= stale")
+        if min(
+            self.fresh_interval_multiplier,
+            self.delayed_interval_multiplier,
+            self.stale_interval_multiplier,
+        ) <= 0:
+            raise ValueError("freshness interval multipliers must be positive")
+        return self
 
 
 class TrendConfig(BaseModel):
@@ -81,6 +125,41 @@ class ProductConfig(BaseModel):
     forecast: ForecastConfig = Field(default_factory=ForecastConfig)
     stations: dict[str, Station]
     spots: dict[str, SpotConfig]
+
+    def freshness_for(self, station_id: str | None) -> FreshnessConfig:
+        """Effective thresholds for one station.
+
+        Precedence is explicit override, then derivation from the station's
+        reporting interval, then the global default. A faster station gets a
+        tighter window rather than inheriting a slow station's patience.
+        """
+        policy = self.freshness
+        fresh = policy.fresh_max_age_minutes
+        delayed = policy.delayed_max_age_minutes
+        stale = policy.stale_max_age_minutes
+
+        station = self.stations.get(station_id) if station_id else None
+        interval = station.expected_interval_minutes if station is not None else None
+        if policy.derive_from_reporting_interval and interval and interval > 0:
+            fresh = round(interval * policy.fresh_interval_multiplier)
+            delayed = round(interval * policy.delayed_interval_multiplier)
+            stale = round(interval * policy.stale_interval_multiplier)
+
+        override = policy.stations.get(station_id) if station_id else None
+        if override is not None:
+            fresh = override.fresh_max_age_minutes or fresh
+            delayed = override.delayed_max_age_minutes or delayed
+            stale = override.stale_max_age_minutes or stale
+
+        # Keep the ladder monotonic even if a partial override inverts it.
+        delayed = max(delayed, fresh)
+        stale = max(stale, delayed)
+        return FreshnessConfig(
+            fresh_max_age_minutes=fresh,
+            delayed_max_age_minutes=delayed,
+            stale_max_age_minutes=stale,
+            derive_from_reporting_interval=False,
+        )
 
     def station_interval_minutes(self, station_id: str, default_minutes: int) -> int:
         """Poll cadence for one station.

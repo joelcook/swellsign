@@ -15,6 +15,7 @@ from ..models import (
     ComponentSource,
     CurrentSnapshot,
     Freshness,
+    FreshnessLimits,
     MeasurementBasis,
     SourceRole,
     SpotIdentity,
@@ -118,11 +119,12 @@ class SnapshotComposer:
             for observation in observations:
                 by_timestamp.setdefault(observation.observed_at, []).append(observation)
 
+            thresholds = self.product_config.freshness_for(source_config.station_id)
             for observed_at in sorted(by_timestamp, reverse=True):
                 age = age_minutes(observed_at, now)
                 hard_limit = min(
                     source_config.maximum_usable_age_minutes,
-                    self.product_config.freshness.stale_max_age_minutes,
+                    thresholds.stale_max_age_minutes,
                 )
                 if age > hard_limit or observed_at > now + timedelta(minutes=5):
                     continue
@@ -134,7 +136,7 @@ class SnapshotComposer:
                     continue
                 observation, triplet = selected
                 basis, height_m, period_s, direction = triplet
-                freshness = classify_freshness(age, self.product_config.freshness)
+                freshness = classify_freshness(age, thresholds)
                 if freshness is Freshness.UNAVAILABLE:
                     continue
                 station = self.product_config.stations.get(source_config.station_id)
@@ -168,13 +170,14 @@ class SnapshotComposer:
                 source_config.station_id,
                 limit=64,
             )
+            thresholds = self.product_config.freshness_for(source_config.station_id)
             for observation in observations:
                 if not _accepted(observation.qc_status):
                     continue
                 age = age_minutes(observation.observed_at, now)
                 hard_limit = min(
                     source_config.maximum_usable_age_minutes,
-                    self.product_config.freshness.stale_max_age_minutes,
+                    thresholds.stale_max_age_minutes,
                 )
                 if age > hard_limit or observation.observed_at > now + timedelta(minutes=5):
                     continue
@@ -182,7 +185,7 @@ class SnapshotComposer:
                     continue
                 direction = _valid_direction(observation.direction_deg_true)
                 gust = observation.gust_mps if _valid_nonnegative(observation.gust_mps) else None
-                freshness = classify_freshness(age, self.product_config.freshness)
+                freshness = classify_freshness(age, thresholds)
                 if freshness is Freshness.UNAVAILABLE:
                     continue
                 station = self.product_config.stations.get(source_config.station_id)
@@ -207,8 +210,25 @@ class SnapshotComposer:
         return None
 
 
-def compact_display_payload(snapshot: CurrentSnapshot) -> CompactDisplayPayload:
-    """Project the exact current snapshot into the stable sign contract."""
+def compact_display_payload(
+    snapshot: CurrentSnapshot,
+    product_config: ProductConfig | None = None,
+) -> CompactDisplayPayload:
+    """Project the exact current snapshot into the stable sign contract.
+
+    Passing the configuration attaches each component's freshness thresholds so
+    a display client can keep classifying correctly while the API is away.
+    """
+
+    def limits_for(component) -> FreshnessLimits | None:
+        if product_config is None:
+            return None
+        effective = product_config.freshness_for(component.source.station_id)
+        return FreshnessLimits(
+            fresh_max_age_minutes=effective.fresh_max_age_minutes,
+            delayed_max_age_minutes=effective.delayed_max_age_minutes,
+            stale_max_age_minutes=effective.stale_max_age_minutes,
+        )
 
     wave = None
     if snapshot.wave is not None:
@@ -226,6 +246,7 @@ def compact_display_payload(snapshot: CurrentSnapshot) -> CompactDisplayPayload:
             age_minutes=snapshot.wave.age_minutes,
             freshness=snapshot.wave.freshness,
             trend=trend,
+            limits=limits_for(snapshot.wave),
         )
 
     wind = None
@@ -236,6 +257,7 @@ def compact_display_payload(snapshot: CurrentSnapshot) -> CompactDisplayPayload:
             observed_at=snapshot.wind.observed_at,
             age_minutes=snapshot.wind.age_minutes,
             freshness=snapshot.wind.freshness,
+            limits=limits_for(snapshot.wind),
         )
 
     return CompactDisplayPayload(
