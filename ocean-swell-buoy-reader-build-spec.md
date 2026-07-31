@@ -911,6 +911,18 @@ GET /v1/spots/{spot_id}/forecast/runs
 GET /v1/spots/{spot_id}/forecast/runs/{run_id}
 ```
 
+### 11.2.1 Tide context endpoint
+
+```text
+GET /v1/spots/{spot_id}/tide?hours=48
+```
+
+Tide predictions are model output on a third path, separate from both observed
+and forecast wave data. Every response carries `mode: "prediction"`, and the
+derived phase is reported only when two adjacent predicted extremes bracket the
+requested moment. The endpoint returns `404` for a spot with no configured tide
+source, and a tide outage never degrades `/now`.
+
 Forecast responses include:
 
 ```json
@@ -1202,6 +1214,7 @@ swellsign/
 |   |-- services/
 |   |   |-- collector.py
 |   |   |-- snapshot.py
+|   |   |-- tide.py
 |   |   `-- trend.py
 |   `-- display/
 |       |-- client.py
@@ -1245,8 +1258,10 @@ swellsign-api.service
 
 swellsign-collector.service
 - polls NDBC independently from API worker count
+- gates each station by its own reporting cadence
 - normalizes and stores observations
 - archives independent seven-day forecast runs
+- archives CO-OPS tide predictions on a third schedule
 - atomically refreshes last-good snapshot files
 
 swellsign-display.service

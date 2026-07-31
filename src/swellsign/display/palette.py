@@ -51,10 +51,18 @@ def dim(
 
 
 def gamma_table(gamma: float = DEFAULT_GAMMA) -> list[int]:
-    """Build a 256-entry perceptual-to-duty-cycle lookup table for the panel."""
+    """Build a 256-entry perceptual-to-duty-cycle lookup table for the panel.
+
+    A channel that the renderer lit is never allowed to round down to zero.
+    Gamma compresses dim values hard, and silently dropping one channel does
+    not dim a color, it changes it: sea glass would drift toward pure green.
+    """
     if gamma <= 0:
         raise ValueError("gamma must be positive")
-    return [round(255 * ((value / 255) ** gamma)) for value in range(256)]
+    return [
+        max(1, round(255 * ((value / 255) ** gamma))) if value > 0 else 0
+        for value in range(256)
+    ]
 
 
 @dataclass(frozen=True)
@@ -64,11 +72,16 @@ class BrightnessSchedule:
     Hours are local wall-clock and each boundary is inclusive of its start.
     Evening begins when the room lighting drops, night when the sign should be
     barely present rather than off.
+
+    These are perceptual levels. Gamma compresses them hard on the way to the
+    panel, and below roughly 0.25 every channel floors to 1, which turns sea
+    glass into grey: the sign loses its color before it loses its brightness.
+    The night default sits above that knee deliberately.
     """
 
     day: float = 0.55
-    evening: float = 0.35
-    night: float = 0.12
+    evening: float = 0.40
+    night: float = 0.28
     day_start_hour: int = 7
     evening_start_hour: int = 19
     night_start_hour: int = 22

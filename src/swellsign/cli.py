@@ -270,8 +270,8 @@ def display(
         typer.Option(min=0.0, max=1.0, help="Pin brightness and ignore the schedule."),
     ] = None,
     day_brightness: Annotated[float, typer.Option(min=0.0, max=1.0)] = 0.55,
-    evening_brightness: Annotated[float, typer.Option(min=0.0, max=1.0)] = 0.35,
-    night_brightness: Annotated[float, typer.Option(min=0.0, max=1.0)] = 0.12,
+    evening_brightness: Annotated[float, typer.Option(min=0.0, max=1.0)] = 0.40,
+    night_brightness: Annotated[float, typer.Option(min=0.0, max=1.0)] = 0.28,
     matrix_brightness: Annotated[int, typer.Option(min=1, max=100)] = 35,
 ) -> None:
     """Poll the API and drive two chained 64x32 Raspberry Pi panels.

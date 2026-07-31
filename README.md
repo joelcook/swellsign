@@ -86,6 +86,27 @@ deliberately low saturation: sea-glass cyan for water, warm white for labels,
 muted amber for wind/data delay, and restrained red only for unavailable data.
 Color never means “good” or “bad” surf.
 
+## Brightness, gamma, and motion
+
+The sign is meant to be barely present at night, so the display client runs
+three independent clocks: the API poll, the frame rate, and the crest cycle.
+
+```bash
+swellsign display --frames-per-second 20 --night-brightness 0.28
+swellsign display --no-motion --brightness 0.4   # fixed level, no schedule
+```
+
+Brightness values are perceptual. Gamma correction is applied once, on the way
+to the panel: a PNG is viewed on an sRGB display that already applies that
+curve, so the simulator keeps perceptual values and correcting in both places
+would darken the preview twice. Below roughly `0.25` every channel floors to
+`1` and sea glass turns grey, so the sign loses its color before it loses its
+brightness; the scheduled night level sits above that knee on purpose.
+
+Motion is decorative and nonsemantic. A one-pixel crest completes one cycle
+per reported dominant period and is suppressed when the period is missing, the
+wave component is not fresh, or `--no-motion` is passed.
+
 ## API
 
 Observation:
@@ -109,6 +130,13 @@ GET /v1/spots/{spot_id}/forecast/runs
 GET /v1/spots/{spot_id}/forecast/runs/{run_id}
 ```
 
+Tide context (predictions, not measurements):
+
+```text
+GET /v1/spots/{spot_id}/tide?hours=48
+GET /v1/spots/{spot_id}/sources
+```
+
 Operations:
 
 ```text
@@ -116,9 +144,30 @@ GET /v1/health
 GET /v1/ready
 ```
 
-`/now` is always `mode: "observed"`; forecast responses are always
-`mode: "forecast"`. Wave and wind each retain their own `observed_at`,
-`age_minutes`, freshness, and station source.
+`/now` is always `mode: "observed"`, forecast responses are always
+`mode: "forecast"`, and tide responses are always `mode: "prediction"`. Wave
+and wind each retain their own `observed_at`, `age_minutes`, freshness, and
+station source.
+
+## Tide context
+
+New Smyrna uses NOAA CO-OPS subordinate station `8721147`, Ponce de Leon Inlet
+South. It publishes high/low predictions rather than a live observed water
+level, so the only derivation offered is the phase between two adjacent
+predicted extremes:
+
+```bash
+swellsign collect-once --tide
+swellsign tide new-smyrna
+```
+
+A phase is reported only when a predicted extreme brackets the moment on both
+sides; the service will not span a gap in the archive or extrapolate past the
+last known extreme. Station `8721164` is deliberately unused: it sits inside
+Mosquito Lagoon and its timing differs materially from the inlet.
+
+Tide has its own model, table, and endpoint. It never enters a
+`CurrentSnapshot` and never appears on the default sign face.
 
 ## Data behavior
 

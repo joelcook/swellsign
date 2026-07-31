@@ -21,25 +21,85 @@ CACHE_MARKER = b"SWL1"
 API_URL = os.getenv("SWELLSIGN_API_URL")
 REFRESH_SECONDS = int(os.getenv("SWELLSIGN_REFRESH_SECONDS", "15"))
 BRIGHTNESS = float(os.getenv("SWELLSIGN_BRIGHTNESS", "0.35"))
+# These are perceptual levels, not duty cycle: gamma below converts them.
+# 0.28 perceptual is roughly 6% duty, which stays visible without lighting
+# the room. Validate against the real panel batch before trusting them.
+DAY_BRIGHTNESS = float(os.getenv("SWELLSIGN_DAY_BRIGHTNESS", "0.55"))
+EVENING_BRIGHTNESS = float(os.getenv("SWELLSIGN_EVENING_BRIGHTNESS", "0.40"))
+NIGHT_BRIGHTNESS = float(os.getenv("SWELLSIGN_NIGHT_BRIGHTNESS", "0.28"))
+# The board has no configured RTC, so local hour is derived from the payload's
+# UTC timestamp plus a fixed offset. New Smyrna is UTC-4 during EDT.
+UTC_OFFSET_HOURS = int(os.getenv("SWELLSIGN_UTC_OFFSET_HOURS", "-4"))
+GAMMA = float(os.getenv("SWELLSIGN_GAMMA", "2.2"))
 
-
-def color(red, green, blue):
-    level = min(1.0, max(0.0, BRIGHTNESS))
-    return (int(red * level) << 16) | (int(green * level) << 8) | int(blue * level)
-
-
+# The RGBMatrix brightness property does not dim proportionally above zero, so
+# dimming is done by scaling RGB values. The panel applies no perceptual curve
+# of its own, so gamma is applied here exactly as the Pi output adapter does.
+BASE_COLORS = {
+    "cyan": (35, 142, 135),
+    "warm": (161, 146, 116),
+    "amber": (165, 93, 34),
+    "warning": (184, 104, 30),
+    "red": (142, 35, 29),
+}
 BLACK = 0x000000
-CYAN = color(35, 142, 135)
-WARM = color(161, 146, 116)
-AMBER = color(165, 93, 34)
-WARNING = color(184, 104, 30)
-RED = color(142, 35, 29)
+
+
+def channel(value, level):
+    """Scale one channel, never letting a lit channel round away to zero.
+
+    Dropping a channel does not dim a color, it changes it: sea glass would
+    drift toward pure green as the sign got darker.
+    """
+    if value <= 0:
+        return 0
+    return max(1, round(value * level))
+
+
+def color(red, green, blue, level):
+    level = min(1.0, max(0.0, level)) ** GAMMA
+    return (
+        (channel(red, level) << 16)
+        | (channel(green, level) << 8)
+        | channel(blue, level)
+    )
+
+
+def palette_for(level):
+    return {name: color(*channels, level) for name, channels in BASE_COLORS.items()}
+
+
+def scheduled_level(payload):
+    """Day/evening/night level from the payload's own UTC timestamp."""
+    stamp = payload.get("generated_at") if isinstance(payload, dict) else None
+    if not isinstance(stamp, str) or len(stamp) < 13:
+        return DAY_BRIGHTNESS
+    try:
+        hour = (int(stamp[11:13]) + UTC_OFFSET_HOURS) % 24
+    except ValueError:
+        return DAY_BRIGHTNESS
+    if 7 <= hour < 19:
+        return DAY_BRIGHTNESS
+    if 19 <= hour < 22:
+        return EVENING_BRIGHTNESS
+    return NIGHT_BRIGHTNESS
+
+
+COLORS = palette_for(BRIGHTNESS)
+CYAN = COLORS["cyan"]
+WARM = COLORS["warm"]
+AMBER = COLORS["amber"]
+WARNING = COLORS["warning"]
+RED = COLORS["red"]
 
 displayio.release_displays()
 matrix = rgbmatrix.RGBMatrix(
     width=128,
     height=32,
-    bit_depth=4,
+    # A dim, gamma-corrected face lives in the bottom of the range, where four
+    # bits (16 levels) posterize badly. Six bits buys 64 levels at some refresh
+    # cost; drop back to 4 if the panel flickers on the real batch.
+    bit_depth=int(os.getenv("SWELLSIGN_BIT_DEPTH", "6")),
     addr_pins=board.MTX_ADDRESS[:4],
     tile=1,
     serpentine=False,
@@ -113,24 +173,26 @@ def format_decimal(value):
 
 
 def render(payload, offline, elapsed_seconds):
+    colors = palette_for(scheduled_level(payload))
     header.text = payload.get("spot", "")[:16]
+    header.color = colors["warm"]
     age = age_text(payload, elapsed_seconds)
     state = payload.get("data_state", "unavailable")
     if offline:
         status.text = "OFF " + age
-        status.color = WARNING
+        status.color = colors["warning"]
     elif payload.get("fallback_used"):
         status.text = "ALT " + age
-        status.color = WARNING
+        status.color = colors["warning"]
     elif state == "stale":
         status.text = "STL " + age
-        status.color = WARNING
+        status.color = colors["warning"]
     elif state == "delayed":
         status.text = "DLY " + age
-        status.color = WARNING
+        status.color = colors["warning"]
     else:
         status.text = age
-        status.color = WARM
+        status.color = colors["warm"]
 
     wave_data = payload.get("wave")
     if wave_data:
@@ -144,10 +206,10 @@ def render(payload, offline, elapsed_seconds):
             format_decimal(wave_data.get("period_s")),
             wave_data.get("direction") or "--",
         )
-        wave.color = CYAN
+        wave.color = colors["cyan"]
     else:
         wave.text = "      NO WAVE DATA"
-        wave.color = RED
+        wave.color = colors["red"]
 
     wind_data = payload.get("wind")
     if wind_data:
@@ -158,6 +220,7 @@ def render(payload, offline, elapsed_seconds):
         )
     else:
         wind.text = "WIND --"
+    wind.color = colors["amber"]
     display.refresh()
 
 

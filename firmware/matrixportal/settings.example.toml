@@ -5,3 +5,13 @@ SWELLSIGN_API_URL = "http://192.168.1.10:8000/v1/spots/new-smyrna/display"
 SWELLSIGN_REFRESH_SECONDS = 15
 SWELLSIGN_BRIGHTNESS = 0.35
 
+# Brightness is applied by scaling RGB values, because the CircuitPython
+# RGBMatrix brightness property does not dim proportionally above zero.
+# Local hour comes from the payload's UTC timestamp plus this offset,
+# since the board has no configured RTC. New Smyrna is -4 during EDT.
+SWELLSIGN_DAY_BRIGHTNESS = 0.35
+SWELLSIGN_EVENING_BRIGHTNESS = 0.22
+SWELLSIGN_NIGHT_BRIGHTNESS = 0.08
+SWELLSIGN_UTC_OFFSET_HOURS = -4
+SWELLSIGN_GAMMA = 2.2
+
