@@ -10,6 +10,7 @@ import signal
 import time
 from contextlib import suppress
 from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -17,10 +18,12 @@ import typer
 import uvicorn
 
 from .config import get_product_config, get_settings
-from .display.client import DisplayClient
+from .display.client import DisplayClient, recalculate_ages
 from .display.hub75 import PiMatrixOutput
+from .display.palette import BrightnessController, BrightnessSchedule
 from .display.renderer import DisplayRenderer
 from .display.simulator import render_json_file
+from .models import CompactDisplayPayload
 from .services.collector import build_default_collection_service
 from .services.snapshot import SnapshotComposer
 from .services.tide import TideContextService
@@ -75,6 +78,26 @@ class _CollectorLock:
             fcntl.flock(self.handle.fileno(), fcntl.LOCK_UN)
             self.handle.close()
             self.handle = None
+
+
+def _animation_phase(
+    payload: CompactDisplayPayload,
+    started_monotonic: float,
+    *,
+    motion: bool,
+) -> float | None:
+    """Position within one dominant-period cycle, or ``None`` for no motion.
+
+    The mark is decorative and nonsemantic: it never implies phase-accurate
+    ocean motion. The renderer additionally suppresses it unless the wave
+    component is fresh.
+    """
+    if not motion or payload.wave is None:
+        return None
+    period = payload.wave.period_s
+    if not period or period <= 0:
+        return None
+    return ((time.monotonic() - started_monotonic) % period) / period
 
 
 @app.command("init-db")
@@ -236,20 +259,69 @@ def display(
         typer.Option(help="Versioned /display endpoint accepting observed data only."),
     ] = "http://127.0.0.1:8000/v1/spots/new-smyrna/display",
     cache_path: Annotated[Path, typer.Option()] = Path("data/display-cache.json"),
-    interval_seconds: Annotated[float, typer.Option(min=1.0)] = 15.0,
-    pixel_brightness: Annotated[float, typer.Option(min=0.0, max=1.0)] = 0.55,
+    interval_seconds: Annotated[float, typer.Option(min=1.0, help="API poll cadence.")] = 15.0,
+    frames_per_second: Annotated[float, typer.Option(min=1.0, max=60.0)] = 20.0,
+    motion: Annotated[
+        bool,
+        typer.Option("--motion/--no-motion", help="Period-paced one-pixel crest."),
+    ] = True,
+    brightness: Annotated[
+        float | None,
+        typer.Option(min=0.0, max=1.0, help="Pin brightness and ignore the schedule."),
+    ] = None,
+    day_brightness: Annotated[float, typer.Option(min=0.0, max=1.0)] = 0.55,
+    evening_brightness: Annotated[float, typer.Option(min=0.0, max=1.0)] = 0.35,
+    night_brightness: Annotated[float, typer.Option(min=0.0, max=1.0)] = 0.12,
     matrix_brightness: Annotated[int, typer.Option(min=1, max=100)] = 35,
 ) -> None:
-    """Poll the API and drive two chained 64x32 Raspberry Pi panels."""
+    """Poll the API and drive two chained 64x32 Raspberry Pi panels.
+
+    Frame rendering is deliberately decoupled from API polling. The upstream
+    cadence is minutes, the poll is seconds, and the crest needs to complete
+    one cycle per reported dominant period, so all three run independently.
+    """
     client = DisplayClient(api_url, cache_path)
-    renderer = DisplayRenderer(brightness=pixel_brightness)
+    renderer = DisplayRenderer(brightness=day_brightness if brightness is None else brightness)
     output = PiMatrixOutput(brightness=matrix_brightness)
+    controller = (
+        None
+        if brightness is not None
+        else BrightnessController(
+            BrightnessSchedule(
+                day=day_brightness,
+                evening=evening_brightness,
+                night=night_brightness,
+            )
+        )
+    )
+
+    frame_interval = 1.0 / frames_per_second
+    payload = None
+    next_poll = 0.0
+    started = time.monotonic()
+
     try:
         while True:
-            payload = client.fetch()
+            frame_started = time.monotonic()
+            if frame_started >= next_poll:
+                payload = client.fetch()
+                next_poll = frame_started + interval_seconds
+
             if payload is not None:
-                output.draw(renderer.render(payload, offline=client.offline))
-            time.sleep(interval_seconds)
+                # Recalculate every frame so the age keeps climbing and the
+                # freshness stays honest through a long API outage.
+                frame_payload = recalculate_ages(payload)
+                if controller is not None:
+                    renderer.brightness = controller.advance(datetime.now().astimezone().hour)
+                output.draw(
+                    renderer.render(
+                        frame_payload,
+                        offline=client.offline,
+                        animation_phase=_animation_phase(frame_payload, started, motion=motion),
+                    )
+                )
+
+            time.sleep(max(0.0, frame_interval - (time.monotonic() - frame_started)))
     except KeyboardInterrupt:
         pass
     finally:
