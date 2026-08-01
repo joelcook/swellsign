@@ -2,15 +2,21 @@
 <!--
   Keeps the collector running on a Mac between now and the Raspberry Pi.
 
-  Install:
-    cp deploy/launchd/com.swellsign.collector.plist ~/Library/LaunchAgents/
+  Install, substituting the two placeholders for your own paths. They are
+  placeholders rather than real values so this file does not publish one
+  machine's username and directory layout to everyone who clones the repo:
+
+    sed -e "s|__PROJECT_DIR__|$PWD|g" \
+        -e "s|__PYTHON__|$(command -v python3)|g" \
+        deploy/launchd/com.swellsign.collector.plist \
+        > ~/Library/LaunchAgents/com.swellsign.collector.plist
     launchctl load ~/Library/LaunchAgents/com.swellsign.collector.plist
 
   Stop:
     launchctl unload ~/Library/LaunchAgents/com.swellsign.collector.plist
 
-  Edit the two absolute paths below if the project or interpreter moves; launchd
-  runs with a minimal environment and will not resolve them from a shell PATH.
+  Both must be absolute: launchd runs with a minimal environment and will not
+  resolve anything from a shell PATH.
 
   The collector takes an exclusive lock on the database, so a second copy exits
   rather than double-polling. Stop any ad-hoc `swellsign collector` before
@@ -23,19 +29,19 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3</string>
+        <string>__PYTHON__</string>
         <string>-m</string>
         <string>swellsign</string>
         <string>collector</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/joelcook/Developer/swellsign</string>
+    <string>__PROJECT_DIR__</string>
 
     <key>EnvironmentVariables</key>
     <dict>
         <key>PYTHONPATH</key>
-        <string>/Users/joelcook/Developer/swellsign/src</string>
+        <string>__PROJECT_DIR__/src</string>
         <key>PYTHONUNBUFFERED</key>
         <string>1</string>
     </dict>
@@ -51,9 +57,9 @@
     <integer>60</integer>
 
     <key>StandardOutPath</key>
-    <string>/Users/joelcook/Developer/swellsign/data/collector.log</string>
+    <string>__PROJECT_DIR__/data/collector.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/joelcook/Developer/swellsign/data/collector.log</string>
+    <string>__PROJECT_DIR__/data/collector.log</string>
 
     <!-- Background priority: this is an appliance, not something the user is
          waiting on. -->
