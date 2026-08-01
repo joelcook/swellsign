@@ -66,6 +66,38 @@ def create_app(
         lifespan=lifespan,
     )
 
+    # Cache lifetimes for an edge or reverse proxy in front of this API.
+    #
+    # Caching a snapshot does not freeze its age: every client recalculates age
+    # from `observed_at`, which is why the compact payload carries timestamps
+    # rather than a precomputed age it would have to trust. So a cached body
+    # stays truthful, and the sign's 15-second poll can be absorbed at the edge
+    # instead of reaching SQLite.
+    #
+    # Upper bound on staleness is the collector's poll interval, currently ten
+    # minutes, so these are all comfortably shorter than the data's own cadence.
+    CACHE_SECONDS: tuple[tuple[str, int], ...] = (
+        ("/v1/health", 0),
+        ("/v1/ready", 0),
+        ("/v1/spots/", 30),  # /now, /display, and per-spot views
+        ("/v1/stations", 120),
+        ("/v1/spots", 600),  # the spot list is configuration
+    )
+
+    @application.middleware("http")
+    async def cache_headers(request, call_next):
+        response = await call_next(request)
+        if request.method != "GET" or response.status_code >= 400:
+            return response
+        path = request.url.path
+        for prefix, seconds in CACHE_SECONDS:
+            if path.startswith(prefix):
+                response.headers["Cache-Control"] = (
+                    "no-store" if seconds == 0 else f"public, max-age={seconds}"
+                )
+                break
+        return response
+
     @application.get("/v1/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
