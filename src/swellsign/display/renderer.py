@@ -15,11 +15,41 @@ from .palette import DEFAULT_PALETTE, Palette, dim
 WIDTH = 128
 HEIGHT = 32
 
+# Text ran flush to columns 0 and 127, so on a real panel it would touch the
+# bezel on both sides. Two pixels of quiet edge costs one character of budget
+# and makes the face look deliberate rather than cropped.
+MARGIN = 2
+
+# Field boxes for the wave row, sized for the widest value each can hold:
+# a five-character label (SWELL), a height with units, the trend mark, a
+# period, and a right-aligned three-character direction.
+LABEL_X = MARGIN
+HEIGHT_X = 35
+HEIGHT_MAX_X = 65
+TREND_X = 68
+PERIOD_X = 76
+PERIOD_MAX_X = 106
+
 
 def _safe_number(value: float | None, decimals: int = 1) -> str:
     if value is None:
         return "--"
     return f"{value:.{decimals}f}"
+
+
+def _fit_measurement(value: float | None, suffix: str, available_px: int) -> str:
+    """Render a value with its units, dropping precision before dropping units.
+
+    The suffix has to be measured too. Checking only the number let `14.8` pass
+    while `14.8FT` overflowed its box and lost the T, which reads as a unit the
+    sign does not actually use.
+    """
+    if value is None:
+        return f"--{suffix}"
+    for candidate in (f"{value:.1f}{suffix}", f"{value:.0f}{suffix}", f"{value:.0f}"):
+        if text_width(candidate) <= available_px:
+            return candidate
+    return f"{value:.0f}"
 
 
 def _age(observed_at: datetime, now: datetime) -> int:
@@ -73,14 +103,14 @@ class DisplayRenderer:
         text: str,
         color: tuple[int, int, int],
     ) -> None:
-        self._text(image, (WIDTH - text_width(text), y), text, color)
+        self._text(image, (WIDTH - MARGIN - text_width(text), y), text, color)
 
     def _trend_mark(
         self,
         image: Image.Image,
         state: TrendState,
         *,
-        x: int = 63,
+        x: int = TREND_X,
         y: int = 12,
     ) -> None:
         color = self._color(self.palette.sea_glass)
@@ -138,8 +168,8 @@ class DisplayRenderer:
 
         wave_age = _age(data.wave.observed_at, render_time) if data.wave else None
         status, status_color = self._status_text(data, wave_age, offline=offline)
-        status_x = WIDTH - text_width(status)
-        self._text(image, (0, 1), data.spot[:18], warm, max_x=max(0, status_x - 2))
+        status_x = WIDTH - MARGIN - text_width(status)
+        self._text(image, (MARGIN, 1), data.spot[:18], warm, max_x=max(0, status_x - 3))
         self._right_text(image, 1, status, status_color)
 
         # A quiet two-pixel marine trace divides the header. It conveys no rating.
@@ -155,37 +185,40 @@ class DisplayRenderer:
             self._text(image, ((WIDTH - text_width(message)) // 2, 12), message, error)
         else:
             wave = data.wave
-            height = _safe_number(wave.height_ft)
-            if len(height) > 4:
-                height = f"{wave.height_ft:.0f}"
-            period = _safe_number(wave.period_s)
-            if len(period) > 4:
-                period = f"{wave.period_s:.0f}"
-            self._text(image, (0, 12), wave.label[:5], warm)
-            self._text(image, (29, 12), f"{height}FT", cyan, max_x=61)
+            height = _fit_measurement(wave.height_ft, "FT", HEIGHT_MAX_X - HEIGHT_X)
+            period = _fit_measurement(wave.period_s, "S", PERIOD_MAX_X - PERIOD_X)
+            self._text(image, (LABEL_X, 12), wave.label[:5], warm, max_x=HEIGHT_X - 3)
+            self._text(image, (HEIGHT_X, 12), height, cyan, max_x=HEIGHT_MAX_X)
             self._trend_mark(image, wave.trend)
-            self._text(image, (72, 12), f"{period}S", cyan, max_x=104)
+            self._text(image, (PERIOD_X, 12), period, cyan, max_x=PERIOD_MAX_X)
             self._right_text(image, 12, (wave.direction or "--")[:3], cyan)
 
-            # Optional one-pixel breathing mark; period-paced by the caller.
+            # Optional one-pixel crest, period-paced by the caller.
+            #
+            # It rides the divider row rather than the wave row. Sharing a row
+            # with the measurements meant it collided with three-letter
+            # directions like ESE, and a decorative mark must never sit on top
+            # of a reading. Here it has the row to itself and can cross the
+            # whole face, which reads more like a passing swell anyway.
             if (
                 animation_phase is not None
                 and wave.period_s > 0
                 and wave.freshness is Freshness.FRESH
             ):
                 phase = animation_phase % 1.0
-                crest_x = 106 + int(phase * 8)
-                crest_y = 18 - (1 if 0.25 <= phase < 0.75 else 0)
-                pixels[crest_x, crest_y] = quiet
+                crest_x = int(phase * WIDTH)
+                if 0 <= crest_x < WIDTH:
+                    pixels[crest_x, 8] = cyan
+                    pixels[crest_x, 9] = quiet
 
-        self._text(image, (0, 24), "WIND", warm)
+        self._text(image, (MARGIN, 24), "WIND", warm)
         if data.wind is None:
-            self._text(image, (31, 24), "--", self._color(self.palette.warning_amber))
+            self._text(image, (HEIGHT_X, 24), "--", self._color(self.palette.warning_amber))
         else:
             wind = data.wind
-            self._text(image, (31, 24), (wind.direction or "--")[:3], amber)
+            self._text(image, (HEIGHT_X, 24), (wind.direction or "--")[:3], amber)
             speed = f"{wind.speed_mph:.0f}MPH"
-            if len(speed) > 6:
+            if text_width(speed) > WIDTH - MARGIN - PERIOD_X:
                 speed = "99+MPH"
             self._right_text(image, 24, speed, amber)
 

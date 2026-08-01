@@ -98,6 +98,9 @@
     color: var(--muted);
   }
   label { display: block; margin-bottom: 10px; }
+  /* label{display:block} outranks the UA [hidden] rule, so the manual
+     brightness row stayed visible while the schedule was on. */
+  [hidden] { display: none !important; }
   label:last-child { margin-bottom: 0; }
   .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   select, input[type="range"], button {
