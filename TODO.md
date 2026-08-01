@@ -39,6 +39,28 @@ panel is grouped at the bottom, since none of it can be settled from software.
 
 ## Data
 
+- **Wind is measured 31.6 km offshore and presented as if it were the break's.**
+  Found 2026-08-01 when Surfline showed 4 kts on the beach while we showed
+  27 mph. Three things stacked: our config had 41069 at the wrong coordinates
+  (30 km error, now fixed against NDBC's station table); the buoy is genuinely
+  ~20 miles out where there is no surface friction and wind runs well above
+  beach values; and the reading was 168 minutes old, catching a squall that had
+  since passed.
+
+  All three are now visible — `distance_to_spot_m` is correct and the component
+  reads `delayed` — but the sign still just says `WIND`. Spec 3.1 forbids
+  presenting a remote source as a local measurement for waves; the same argument
+  applies to wind, and arguably harder, because offshore-versus-onshore is the
+  judgment `beach_facing_deg` is meant to enable and a 20-mile-out anemometer
+  cannot support it.
+
+  Options: disclose the distance on the face the way `ALT` discloses a fallback;
+  find a closer anemometer; or accept it and label it. NOAA CO-OPS 8721147, the
+  tide station 5 km from the break, does **not** offer a wind product. Trident
+  Pier (8721604) does but is 80 km south. Land stations near Daytona are worth
+  checking before concluding no local option exists.
+
+
 - **Decide a retention policy for `raw_fetches` before deploying to a server.**
   Measured 2026-08-01: the archive grows about 13 MB/day, roughly 4.8 GB/year,
   and is 26% of the database already after a day and a half. Observations are

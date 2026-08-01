@@ -53,9 +53,9 @@ stations:
     provider: ndbc
     provider_station_id: "41070"
     canonical_physical_station_id: "ndbc:41070"
-    name: New Smyrna Beach Buoy
-    latitude: 29.025
-    longitude: -80.884
+    name: Ponce de Leon Inlet Waves (PNCWAVE)
+    latitude: 29.289
+    longitude: -80.803
     expected_interval_minutes: 60
     poll_interval_minutes: 10
     capabilities: [waves, water_temperature]
@@ -65,9 +65,9 @@ stations:
     provider: ndbc
     provider_station_id: "41069"
     canonical_physical_station_id: "ndbc:41069"
-    name: New Smyrna Beach Wind
-    latitude: 29.025
-    longitude: -80.884
+    name: Ponce de Leon Inlet (PNC)
+    latitude: 29.289
+    longitude: -80.803
     expected_interval_minutes: 60
     poll_interval_minutes: 10
     capabilities: [wind]
