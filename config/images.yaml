@@ -1,0 +1,39 @@
+# Spot imagery manifest.
+#
+# Public domain or CC0 only. Neither requires attribution and neither carries a
+# share-alike clause, so compositing the sign over one creates no obligation
+# that propagates to the app. Credit is composited into the frame anyway,
+# because it costs nothing and is the right thing to do.
+#
+# CC BY-SA is deliberately excluded. Share-alike would attach to every rendered
+# frame and follow the app wherever it goes. "New Smyrna Beach Inlet FL 2016"
+# was the correct location and was dropped for exactly this reason.
+#
+# Files are cached to data/images/ which is gitignored; this manifest is the
+# tracked source of truth for what to fetch and how it must be credited.
+
+defaults:
+  # Used by any spot with no image of its own. The sign falls back to a dark
+  # field rather than a wrong photo when this is unset.
+  image: surf-shore
+
+images:
+  surf-barrel:
+    url: https://upload.wikimedia.org/wikipedia/commons/9/9a/Surfer_crouches_low_in_the_barrel_of_a_wave.jpg
+    source: Wikimedia Commons
+    license: Public domain
+    author: Steve Hillebrand, U.S. Fish and Wildlife Service
+    credit: USFWS / STEVE HILLEBRAND . PUBLIC DOMAIN
+    local_path: data/images/surf-barrel.jpg
+
+  surf-shore:
+    url: https://upload.wikimedia.org/wikipedia/commons/e/e1/Waves_washes_on_beach_shore_%28Unsplash%29.jpg
+    source: Wikimedia Commons
+    license: CC0
+    author: Barn Images
+    credit: BARN IMAGES . CC0
+    local_path: data/images/surf-shore.jpg
+
+# Per-spot assignment. Unlisted spots use defaults.image.
+spots:
+  new-smyrna: surf-shore
