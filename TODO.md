@@ -113,6 +113,37 @@ panel is grouped at the bottom, since none of it can be settled from software.
   buoy was recovered on 2026-04-27. Do not configure it as a live source until
   deployment and reporting are independently verified.
 
+## Frame TV Art Mode — blocked on a protocol mismatch
+
+Diagnosed 2026-08-01 against a real QN50LS03FAFXZA (LS03F, the 2025 Frame
+generation). Everything up to the art channel works:
+
+```
+REST /api/v2/     PowerState on, FrameTVSupport true, TokenAuthSupport true
+websocket         ms.channel.connect received, client registered, no prompt
+art().supported() True, instantly
+art().get_api_version()   websocket timeout
+async fork        ConnectionFailure: {'event': 'ms.channel.timeOut'}
+```
+
+So the TV accepts the socket and then refuses to answer art commands. Both
+`xchwarze/samsung-tv-ws-api` (upstream, what we depend on) and
+`NickWaterton/samsung-tv-ws-api` (the fork maintained for newer Frames, which
+claims support through the 2024 LS03D) fail the same way. This TV is one
+generation newer than either library documents.
+
+Worth trying before writing more code, in order of likelihood:
+
+1. **Settings → General → External Device Manager → Device Connect Manager** —
+   set Access Notification to First Time Only and confirm this Mac is allowed in
+   Device List. A denial here produces exactly this silent channel timeout.
+2. Put the TV in **Art Mode** rather than watching an input, then retry.
+3. Check whether the fork has newer commits addressing 2025 models.
+
+**This does not block the TV app.** The Tizen path talks HTTP to our own server
+and never touches the Samsung art API, so Stage 3 can proceed regardless. Art
+Mode is the ambient-while-off variant, not the product.
+
 ## Hardware, blocked on buying panels
 
 - **Validate the brightness constants.** Day 0.55 / evening 0.40 / night 0.28
