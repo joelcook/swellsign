@@ -123,26 +123,19 @@ def _cover(background: Image.Image, width: int, height: int) -> Image.Image:
     return resized.crop((left, top, left + width, top + height))
 
 
-def _scrim(size: tuple[int, int], band_top: int, band_bottom: int) -> Image.Image:
-    """Darkening mask that protects legibility without hiding the photograph.
+def _dim(image: Image.Image, amount: float) -> Image.Image:
+    """Uniformly darken a photograph.
 
-    A flat overlay would either wash the sign out or mute the whole image. This
-    darkens everything slightly, then deepens through the band the sign
-    occupies, fading back out above and below so there is no visible edge.
+    Deliberately uniform. An earlier version darkened a horizontal band behind
+    the sign, which read as a black bar ruled across the picture rather than as
+    lighting. The sign carries its own opaque enclosure, so nothing behind it
+    needs protecting; this only stops a bright photo overpowering a face that
+    is meant to be dim.
     """
-    width, height = size
-    mask = Image.new("L", size, 90)
-    draw = ImageDraw.Draw(mask)
-    feather = max(1, (band_bottom - band_top) // 2)
-    for y in range(max(0, band_top - feather), min(height, band_bottom + feather)):
-        if y < band_top:
-            weight = (y - (band_top - feather)) / feather
-        elif y > band_bottom:
-            weight = 1 - (y - band_bottom) / feather
-        else:
-            weight = 1.0
-        draw.line([(0, y), (width, y)], fill=int(90 + 150 * max(0.0, min(1.0, weight))))
-    return mask.filter(ImageFilter.GaussianBlur(feather * 0.3))
+    if amount <= 0:
+        return image
+    factor = max(0.0, 1.0 - min(1.0, amount))
+    return image.point(lambda value: int(value * factor))
 
 
 def render_frame_image(
@@ -156,6 +149,7 @@ def render_frame_image(
     background: Image.Image | Path | str | None = None,
     credit: str | None = None,
     placement: str = "center",
+    background_dim: float = 0.25,
 ) -> Image.Image:
     """Render the face as a framed object centred on a dark field.
 
@@ -180,11 +174,8 @@ def render_frame_image(
         top = (height - sign.height) // 2
     origin = ((width - sign.width) // 2, max(0, min(height - sign.height, top)))
 
-    if background is not None:
-        # Darken before compositing. The sign is deliberately dim, and dim
-        # sea-glass over a bright sky is unreadable.
-        mask = _scrim(scene.size, origin[1] - cell * 3, origin[1] + sign.height + cell * 3)
-        scene = Image.composite(Image.new("RGB", scene.size, (0, 0, 0)), scene, mask)
+    if background is not None and background_dim > 0:
+        scene = _dim(scene, background_dim)
 
     # The panel spills light onto the wall around it. Without this the sign
     # looks pasted onto the background rather than switched on in front of it.

@@ -347,6 +347,10 @@ def frame_tv(
         str,
         typer.Option(help="Where the sign sits: center or lower."),
     ] = "center",
+    background_dim: Annotated[
+        float,
+        typer.Option(min=0.0, max=1.0, help="Uniformly darken the photo. 0 leaves it alone."),
+    ] = 0.0,
     once: Annotated[bool, typer.Option("--once", help="Push a single frame and exit.")] = False,
 ) -> None:
     """Push the rendered face to a Samsung Frame TV's Art Mode.
@@ -401,6 +405,7 @@ def frame_tv(
             background=background,
             credit=credit,
             placement=placement,
+            background_dim=background_dim,
         )
         content_id = client.push(image)
         typer.echo(f"pushed {content_id or '(failed)'}")
