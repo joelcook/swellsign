@@ -41,6 +41,7 @@ class CollectionResult:
     forecast_points: int = 0
     unchanged: int = 0
     skipped: int = 0
+    pruned: int = 0
     errors: dict[str, str] = field(default_factory=dict)
 
     @property
@@ -148,6 +149,14 @@ class CollectionService:
                             "resource_type": raw.resource_type,
                         },
                     )
+
+        window = self.product_config.retention.raw_fetch_body_days
+        if window is not None:
+            try:
+                result.pruned = self.repository.prune_raw_fetch_bodies(older_than_days=window)
+            except Exception as exc:
+                result.errors["retention"] = f"{type(exc).__name__}: {exc}"
+                logger.exception("raw fetch pruning failed")
 
         if self.snapshot_dir is not None:
             for spot_id in self.product_config.spots:

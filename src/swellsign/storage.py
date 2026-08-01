@@ -8,6 +8,7 @@ stay pleasant to inspect by hand.
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import sqlite3
@@ -28,7 +29,20 @@ from .models import (
     WindObservation,
 )
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+
+# Provider bodies are text and compress to roughly a seventh of their size. The
+# sha256 is always of the *original* bytes, so provenance survives compression
+# and survives the body later being pruned away entirely.
+BODY_IDENTITY = "identity"
+BODY_GZIP = "gzip"
+
+# Columns added after the first release. SQLite cannot express these with
+# CREATE TABLE IF NOT EXISTS, so they are applied explicitly on initialize().
+ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    ("raw_fetches", "body_encoding", f"TEXT NOT NULL DEFAULT '{BODY_IDENTITY}'"),
+    ("raw_fetches", "body_pruned_at_utc", "TEXT"),
+)
 
 
 class StorageError(RuntimeError):
@@ -61,6 +75,33 @@ def _unjson(value: str | None, default: Any) -> Any:
     return default if value is None else json.loads(value)
 
 
+def _encode_body(body: bytes) -> tuple[bytes, str]:
+    """Compress an archived body when that actually saves space.
+
+    Tiny bodies and already-compressed payloads can come out larger, so the
+    result is only kept when it wins.
+    """
+    if not body:
+        return body, BODY_IDENTITY
+    packed = gzip.compress(body, compresslevel=6)
+    if len(packed) < len(body):
+        return packed, BODY_GZIP
+    return body, BODY_IDENTITY
+
+
+def _decode_body(row: sqlite3.Row) -> bytes:
+    """Return the original bytes regardless of how the row happens to be stored.
+
+    Rows predating the gzip migration, and rows whose body has been pruned, both
+    read back through here without the caller knowing the difference.
+    """
+    blob = bytes(row["body_blob"] or b"")
+    keys = row.keys()
+    if "body_encoding" in keys and row["body_encoding"] == BODY_GZIP and blob:
+        return gzip.decompress(blob)
+    return blob
+
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version INTEGER PRIMARY KEY,
@@ -78,6 +119,8 @@ CREATE TABLE IF NOT EXISTS raw_fetches (
     content_type TEXT,
     body_blob BLOB NOT NULL,
     body_sha256 TEXT NOT NULL,
+    body_encoding TEXT NOT NULL DEFAULT 'identity',
+    body_pruned_at_utc TEXT,
     error_json TEXT
 );
 
@@ -261,6 +304,7 @@ class SQLiteRepository:
             connection.execute("PRAGMA journal_mode = WAL")
             connection.execute("PRAGMA synchronous = NORMAL")
             connection.executescript(SCHEMA)
+            self._add_missing_columns(connection)
             connection.execute(
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at_utc) VALUES (?, ?)",
                 (SCHEMA_VERSION, _utc_text(datetime.now(UTC))),
@@ -268,6 +312,24 @@ class SQLiteRepository:
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         finally:
             connection.close()
+
+    @staticmethod
+    def _add_missing_columns(connection: sqlite3.Connection) -> None:
+        """Apply additive column migrations to an existing database.
+
+        Every entry must be nullable or carry a default, so an older row remains
+        valid without a rewrite. Existing bodies are left marked `identity`
+        rather than being recompressed: rewriting the whole archive on upgrade
+        would be a long blocking write for no benefit, and mixed encodings read
+        back fine.
+        """
+        for table, column, definition in ADDED_COLUMNS:
+            existing = {
+                row["name"]
+                for row in connection.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+            if column not in existing:
+                connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def is_ready(self) -> bool:
         if not self.path.exists():
@@ -342,21 +404,25 @@ class SQLiteRepository:
         return [_station_from_row(row) for row in rows]
 
     def save_raw_fetch(self, raw: RawFetch) -> None:
+        # Hash the original bytes, then store compressed. The digest stays a
+        # statement about what the provider sent, independent of how we keep it.
         body_hash = hashlib.sha256(raw.body).hexdigest()
+        stored, encoding = _encode_body(raw.body)
         with self._transaction() as connection:
             connection.execute(
                 """
                 INSERT INTO raw_fetches (
                     id, provider, resource_type, source_url, requested_at_utc,
                     received_at_utc, http_status, content_type, body_blob,
-                    body_sha256, error_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    body_sha256, body_encoding, error_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     received_at_utc = excluded.received_at_utc,
                     http_status = excluded.http_status,
                     content_type = excluded.content_type,
                     body_blob = excluded.body_blob,
                     body_sha256 = excluded.body_sha256,
+                    body_encoding = excluded.body_encoding,
                     error_json = excluded.error_json
                 """,
                 (
@@ -368,11 +434,37 @@ class SQLiteRepository:
                     _utc_text(raw.received_at),
                     raw.http_status,
                     raw.content_type,
-                    raw.body,
+                    stored,
                     body_hash,
+                    encoding,
                     _json(raw.error) if raw.error is not None else None,
                 ),
             )
+
+    def prune_raw_fetch_bodies(self, *, older_than_days: int) -> int:
+        """Drop archived bodies past the retention window.
+
+        The row, its `body_sha256`, and every foreign key from a normalized
+        observation survive, so spec 7's requirement that raw fetches stay
+        addressable holds. What is lost is the ability to re-parse; what is kept
+        is the ability to say exactly what was received and when.
+        """
+        cutoff = _utc_text(datetime.now(UTC) - timedelta(days=older_than_days))
+        now = _utc_text(datetime.now(UTC))
+        with self._transaction() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE raw_fetches
+                   SET body_blob = X'',
+                       body_encoding = ?,
+                       body_pruned_at_utc = ?
+                 WHERE requested_at_utc < ?
+                   AND body_pruned_at_utc IS NULL
+                   AND LENGTH(body_blob) > 0
+                """,
+                (BODY_IDENTITY, now, cutoff),
+            )
+            return cursor.rowcount or 0
 
     def get_raw_fetch(self, fetch_id: str) -> RawFetch | None:
         with self._connect() as connection:
@@ -388,7 +480,7 @@ class SQLiteRepository:
             received_at=_parse_utc(row["received_at_utc"]),
             http_status=row["http_status"],
             content_type=row["content_type"],
-            body=bytes(row["body_blob"]),
+            body=_decode_body(row),
             error=_unjson(row["error_json"], None),
         )
 

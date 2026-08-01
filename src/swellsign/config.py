@@ -90,6 +90,24 @@ class DisplayConfig(BaseModel):
         return self
 
 
+class RetentionConfig(BaseModel):
+    """How long archived provider bodies are kept.
+
+    Pruning drops the body only. The row, its `body_sha256`, and every foreign
+    key from a normalized observation remain, so spec 7's requirement that raw
+    fetches stay addressable holds and we can still prove what was received.
+    Set `raw_fetch_body_days` to null to keep bodies forever.
+    """
+
+    raw_fetch_body_days: int | None = 30
+
+    @model_validator(mode="after")
+    def _positive_window(self) -> RetentionConfig:
+        if self.raw_fetch_body_days is not None and self.raw_fetch_body_days < 1:
+            raise ValueError("raw_fetch_body_days must be at least 1, or null to disable")
+        return self
+
+
 class TrendConfig(BaseModel):
     window_hours: float = 6
     minimum_samples: int = 4
@@ -152,6 +170,7 @@ class ProductConfig(BaseModel):
     trend: TrendConfig = Field(default_factory=TrendConfig)
     forecast: ForecastConfig = Field(default_factory=ForecastConfig)
     display: DisplayConfig = Field(default_factory=DisplayConfig)
+    retention: RetentionConfig = Field(default_factory=RetentionConfig)
     stations: dict[str, Station]
     spots: dict[str, SpotConfig]
 
