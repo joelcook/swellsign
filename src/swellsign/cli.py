@@ -335,6 +335,7 @@ def frame_tv(
     brightness: Annotated[float, typer.Option(min=0.0, max=1.0)] = 0.55,
     cell: Annotated[int, typer.Option(min=4, max=40, help="LED size in pixels.")] = 20,
     token_file: Annotated[Path, typer.Option()] = Path("data/frame-tv-token.txt"),
+    uploads_file: Annotated[Path, typer.Option()] = Path("data/frame-tv-uploads.json"),
     background: Annotated[
         Path | None,
         typer.Option(help="Photo to sit behind the sign. Omit for a dark field."),
@@ -370,7 +371,7 @@ def frame_tv(
     _configure_logging(settings.log_level)
     composer = SnapshotComposer(repository, product_config)
     tide_service = TideContextService(repository, product_config)
-    client = FrameTvArtClient(host=host, token_file=token_file)
+    client = FrameTvArtClient(host=host, token_file=token_file, uploads_file=uploads_file)
 
     if not token_file.exists():
         typer.echo(
@@ -441,6 +442,30 @@ def frame_tv(
             push_once()
     except KeyboardInterrupt:
         pass
+
+
+@app.command("frame-tv-clean")
+def frame_tv_clean(
+    host: Annotated[str, typer.Option(help="The TV's IP address on your LAN.")],
+    uploads_file: Annotated[Path, typer.Option()] = Path("data/frame-tv-uploads.json"),
+    token_file: Annotated[Path, typer.Option()] = Path("data/frame-tv-token.txt"),
+) -> None:
+    """Delete every image we uploaded to the TV, and nothing else.
+
+    Only ids recorded in the upload manifest are touched. Personal photographs
+    and Art Store purchases share the same MY_F identifier space, so matching on
+    the identifier pattern would eventually delete someone's holiday.
+    """
+    from .display.frametv import FrameTvArtClient
+
+    client = FrameTvArtClient(host=host, token_file=token_file, uploads_file=uploads_file)
+    is_ready, detail = client.ready()
+    if not is_ready:
+        typer.echo(detail, err=True)
+        raise typer.Exit(code=1)
+
+    removed, failed = client.purge()
+    typer.echo(json.dumps({"removed": removed, "failed": failed}, indent=2))
 
 
 @app.command("display")

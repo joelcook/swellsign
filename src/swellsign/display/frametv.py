@@ -16,6 +16,7 @@ Requires the optional dependency:
 from __future__ import annotations
 
 import io
+import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,8 +46,42 @@ class FrameTvArtClient:
     # connection while the TV waits for someone to accept its on-screen
     # pairing prompt. Long enough to walk to the remote, short enough to fail.
     timeout_seconds: float = 45.0
+    # Uploaded ids must outlive the process. Held only in memory, a `--once`
+    # run exits having forgotten what it just uploaded, so retirement never
+    # runs and every push accumulates on the TV forever.
+    #
+    # This file is also the safety boundary for deletion: nothing is ever
+    # removed unless we recorded uploading it. The owner's own photographs and
+    # Art Store purchases share the same MY_F identifier space, so "looks like
+    # ours" is not good enough to delete on.
+    uploads_file: Path | None = None
     _uploaded: list[str] = field(default_factory=list, init=False)
     _tv: Any = field(default=None, init=False)
+
+    def __post_init__(self) -> None:
+        self._uploaded = self._load_uploads()
+
+    def _load_uploads(self) -> list[str]:
+        if self.uploads_file is None or not self.uploads_file.exists():
+            return []
+        try:
+            data = json.loads(self.uploads_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            logger.warning("upload manifest unreadable; starting empty")
+            return []
+        return [str(item) for item in data.get("uploaded", [])]
+
+    def _save_uploads(self) -> None:
+        if self.uploads_file is None:
+            return
+        try:
+            self.uploads_file.parent.mkdir(parents=True, exist_ok=True)
+            self.uploads_file.write_text(
+                json.dumps({"host": self.host, "uploaded": self._uploaded}, indent=2),
+                encoding="utf-8",
+            )
+        except OSError as error:
+            logger.warning("could not persist upload manifest", extra={"error": str(error)})
 
     def _connect(self) -> Any:
         if self._tv is not None:
@@ -134,6 +169,9 @@ class FrameTvArtClient:
         if not content_id:
             return None
         self._uploaded.append(content_id)
+        # Persist before selecting: if anything below fails, the id is already
+        # recorded and a later run can still retire it.
+        self._save_uploads()
 
         if show:
             try:
@@ -160,3 +198,49 @@ class FrameTvArtClient:
                     "frame delete failed; it will need clearing by hand",
                     extra={"content_id": stale, "error": str(error)},
                 )
+        self._save_uploads()
+
+    def purge(self, *, keep_displayed: bool = True) -> tuple[list[str], list[str]]:
+        """Delete every image this client recorded uploading.
+
+        Only ids present in the manifest are touched. Anything the owner put on
+        the TV is invisible to this method by construction, which is the point:
+        personal photographs and our frames share one identifier space, so
+        pattern-matching identifiers would eventually delete someone's holiday.
+
+        Returns the ids removed and the ids that failed.
+        """
+        if not self._uploaded:
+            return [], []
+        art = self._connect().art()
+
+        if keep_displayed:
+            # Deleting the image currently on screen can leave Art Mode on a
+            # blank slot, so move to something that is not ours first.
+            try:
+                current = str(art.get_current().get("content_id", ""))
+                if current in self._uploaded:
+                    others = [
+                        str(i.get("content_id"))
+                        for i in art.available()
+                        if str(i.get("content_id")) not in self._uploaded
+                    ]
+                    if others:
+                        art.select_image(sorted(others)[-1], show=True)
+            except Exception as error:
+                logger.warning("could not reselect before purge", extra={"error": str(error)})
+
+        removed, failed = [], []
+        for content_id in list(self._uploaded):
+            try:
+                art.delete(content_id)
+                removed.append(content_id)
+                self._uploaded.remove(content_id)
+            except Exception as error:
+                failed.append(content_id)
+                logger.warning(
+                    "purge delete failed",
+                    extra={"content_id": content_id, "error": str(error)},
+                )
+        self._save_uploads()
+        return removed, failed
