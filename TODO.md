@@ -39,6 +39,33 @@ panel is grouped at the bottom, since none of it can be settled from software.
 
 ## Data
 
+- **Derive measured swell partitions from NDBC spectra.** This is the one
+  feature that would make the sign strictly better than Surfline rather than
+  merely honest. Verified 2026-07-31: Surfline's buoy reading for Ponce de Leon
+  Inlet (PNCWAVE / 41070) is `1.3ft 6s E 84deg`, identical to ours to the
+  decimal, with an equally empty partition list. Their prominent three-train
+  swell breakdown is labeled *LOTUS Forecast* on their own page - it is model
+  output, not measurement. NDBC publishes full directional spectra for 41070
+  (`.data_spec`, `.swdir`, `.swdir2`, `.swr1`, `.swr2`), which is enough to
+  compute partitions locally. Spec 9.1 has the math: `m0` and `Hm0 = 4*sqrt(m0)`,
+  `Tp = 1/fpeak`, circular statistics for direction. Label the result `PART`,
+  carry algorithm version and confidence, and validate against 41113, which
+  publishes provider partitions we can check against. Measured partitions where
+  a paid product shows modeled ones is a real advantage.
+
+- **Consider surfacing 41113's measured partitions as disclosed context.** A
+  cheaper interim step than a local partitioner. 41113 already publishes
+  separated swell (Surfline lists three trains for it), but we only consult it
+  as a fallback when 41070 goes stale. It is a Cape Canaveral proxy 45 miles
+  south, so it can never be presented as a New Smyrna measurement, but a
+  clearly labeled secondary reading may still be worth more than nothing.
+
+- **Never add surf height.** Recorded here because it will keep coming up.
+  Surfline's headline `1-2ft` is breaking wave face at the beach, derived from
+  a model plus a cam. It is a different physical quantity from buoy significant
+  wave height and it requires bathymetry and refraction modeling. Spec 1.2 and
+  5.1 rule it out, and doing it badly would be worse than not doing it.
+
 - **Run the collector continuously and measure NDBC publication lag.** The
   freshness multipliers (2.5x / 4x / 7x) are a defensible guess, not a
   measurement. Observation timestamps are exactly hourly, but the delay between
