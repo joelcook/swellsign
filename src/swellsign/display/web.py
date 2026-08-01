@@ -44,6 +44,8 @@ STATES: dict[str, str] = {
     "partial-wind": "Valid wave, no wind",
     "no-direction": "Missing direction, values retained",
     "no-wave": "No usable wave observation",
+    "falling-tide": "Tide falling toward the next low",
+    "no-tide": "No tide source or no bracketing extremes",
     "offline": "API unreachable, cached payload ageing",
     "long-values": "Wide values and clamped typography",
 }
@@ -73,6 +75,11 @@ def _base_payload() -> dict[str, Any]:
             "observed_at": "2026-07-30T17:38:00Z",
             "age_minutes": 22,
             "freshness": "fresh",
+        },
+        "tide": {
+            "state": "rising",
+            "next_extreme": "high",
+            "minutes_to_next_extreme": 144,
         },
         "data_state": "fresh",
         "fallback_used": False,
@@ -125,6 +132,14 @@ def build_state(state: str, *, now: datetime | None = None) -> tuple[dict[str, A
     elif state == "no-direction":
         payload["wave"]["direction"] = None
         payload["wind"]["direction"] = None
+    elif state == "falling-tide":
+        payload["tide"] = {
+            "state": "falling",
+            "next_extreme": "low",
+            "minutes_to_next_extreme": 47,
+        }
+    elif state == "no-tide":
+        payload["tide"] = None
     elif state == "no-wave":
         payload["wave"] = None
         payload["data_state"] = "partial"

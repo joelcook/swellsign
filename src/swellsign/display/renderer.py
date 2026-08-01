@@ -30,6 +30,23 @@ TREND_X = 68
 PERIOD_X = 76
 PERIOD_MAX_X = 106
 
+# Tide sits in the gap on the wind row between direction and speed. It is the
+# one predicted value on an otherwise measured face, so it gets a vertical
+# arrow, deliberately unlike the diagonal wave-trend mark, and the label-tier
+# warm white rather than a measurement color.
+TIDE_ARROW_X = 57
+TIDE_TEXT_X = 65
+TIDE_MAX_X = 91
+
+# A solid triangle rather than a stemmed arrow: at this size a long stem under
+# a wide head reads as a dagger, and the shape stays clearly distinct from the
+# diagonal wave-trend mark on the row above.
+_TIDE_ARROW_UP = (
+    "..#..",
+    ".###.",
+    "#####",
+)
+
 
 def _safe_number(value: float | None, decimals: int = 1) -> str:
     if value is None:
@@ -129,6 +146,23 @@ class DisplayRenderer:
             if 0 <= px < WIDTH and 0 <= py < HEIGHT:
                 pixels[px, py] = color
 
+    def _tide_mark(
+        self,
+        image: Image.Image,
+        rising: bool,
+        *,
+        x: int = TIDE_ARROW_X,
+        y: int = 26,
+    ) -> None:
+        pixels = image.load()
+        color = self._color(self.palette.warm_white)
+        rows = _TIDE_ARROW_UP if rising else tuple(reversed(_TIDE_ARROW_UP))
+        for row_index, bits in enumerate(rows):
+            for column, bit in enumerate(bits):
+                px, py = x + column, y + row_index
+                if bit == "#" and 0 <= px < WIDTH and 0 <= py < HEIGHT:
+                    pixels[px, py] = color
+
     def _status_text(
         self,
         payload: CompactDisplayPayload,
@@ -212,6 +246,16 @@ class DisplayRenderer:
                     pixels[crest_x, 9] = quiet
 
         self._text(image, (MARGIN, 24), "WIND", warm)
+
+        # Tide is astronomical prediction, not measurement. It is shown only
+        # when a pair of predicted extremes brackets now; otherwise the gap
+        # stays empty rather than guessing.
+        if data.tide is not None:
+            self._tide_mark(image, data.tide.state == "rising")
+            hours = data.tide.minutes_to_next_extreme / 60
+            hours_text = f"{hours:.1f}H" if hours < 10 else f"{hours:.0f}H"
+            self._text(image, (TIDE_TEXT_X, 24), hours_text, warm, max_x=TIDE_MAX_X)
+
         if data.wind is None:
             self._text(image, (HEIGHT_X, 24), "--", self._color(self.palette.warning_amber))
         else:

@@ -321,6 +321,21 @@ class CompactWind(StrictModel):
     _utc_observed = field_validator("observed_at")(require_utc)
 
 
+class CompactTide(StrictModel):
+    """Tide context for the sign.
+
+    Astronomical prediction, not measurement, which is why it carries its own
+    model rather than joining the wave or wind components. It is the one
+    predicted value allowed on the default face: tide extremes are computed
+    from harmonic constituents years ahead and do not miss the way a surf
+    forecast does.
+    """
+
+    state: Literal["rising", "falling"]
+    next_extreme: Literal["high", "low"]
+    minutes_to_next_extreme: int = Field(ge=0)
+
+
 class CompactDisplayPayload(StrictModel):
     schema_version: Literal[1] = 1
     mode: Literal["observed"] = "observed"
@@ -328,6 +343,7 @@ class CompactDisplayPayload(StrictModel):
     generated_at: datetime
     wave: CompactWave | None = None
     wind: CompactWind | None = None
+    tide: CompactTide | None = None
     data_state: DataState
     fallback_used: bool = False
     warnings: list[str] = Field(default_factory=list)

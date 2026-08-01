@@ -10,6 +10,7 @@ from ..directions import degrees_to_cardinal, normalize_degrees
 from ..freshness import age_minutes, aggregate_data_state, classify_freshness
 from ..models import (
     CompactDisplayPayload,
+    CompactTide,
     CompactWave,
     CompactWind,
     ComponentSource,
@@ -19,6 +20,7 @@ from ..models import (
     MeasurementBasis,
     SourceRole,
     SpotIdentity,
+    TidePhase,
     TrendSnapshot,
     WaveObservation,
     WaveSnapshot,
@@ -213,11 +215,15 @@ class SnapshotComposer:
 def compact_display_payload(
     snapshot: CurrentSnapshot,
     product_config: ProductConfig | None = None,
+    tide: TidePhase | None = None,
 ) -> CompactDisplayPayload:
     """Project the exact current snapshot into the stable sign contract.
 
     Passing the configuration attaches each component's freshness thresholds so
     a display client can keep classifying correctly while the API is away.
+
+    ``tide`` is supplied separately rather than read from the snapshot, because
+    it is a prediction and deliberately has no place in `CurrentSnapshot`.
     """
 
     def limits_for(component) -> FreshnessLimits | None:
@@ -272,6 +278,15 @@ def compact_display_payload(
         generated_at=snapshot.generated_at,
         wave=wave,
         wind=wind,
+        tide=(
+            None
+            if tide is None
+            else CompactTide(
+                state=tide.state,
+                next_extreme=tide.next_extreme.kind,
+                minutes_to_next_extreme=tide.minutes_to_next_extreme,
+            )
+        ),
         data_state=snapshot.data_state,
         fallback_used=snapshot.fallback_used,
         warnings=snapshot.warnings,

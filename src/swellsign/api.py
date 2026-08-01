@@ -114,8 +114,15 @@ def create_app(
         response_model=CompactDisplayPayload,
     )
     def display(spot_id: str) -> CompactDisplayPayload:
-        snapshot = _compose_or_404(resolved_composer, spot_id, utc_clock())
-        return compact_display_payload(snapshot, resolved_config)
+        now = utc_clock()
+        snapshot = _compose_or_404(resolved_composer, spot_id, now)
+        # Tide is resolved alongside rather than inside the snapshot: it is a
+        # prediction and must not become part of the observed contract.
+        return compact_display_payload(
+            snapshot,
+            resolved_config,
+            tide=resolved_tide.phase(spot_id, now=_aware_utc(now)),
+        )
 
     @application.get("/v1/spots/{spot_id}/history")
     def history(
