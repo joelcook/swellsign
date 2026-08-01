@@ -20,6 +20,7 @@ from typing import Annotated, Any
 from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.responses import HTMLResponse
 
+from ..config import get_product_config
 from ..models import CompactDisplayPayload
 from .client import DisplayClient, recalculate_ages
 from .palette import DEFAULT_PALETTE, BrightnessSchedule
@@ -78,6 +79,7 @@ def _base_payload() -> dict[str, Any]:
         },
         "tide": {
             "state": "rising",
+            "level": "mid",
             "next_extreme": "high",
             "minutes_to_next_extreme": 144,
         },
@@ -135,6 +137,7 @@ def build_state(state: str, *, now: datetime | None = None) -> tuple[dict[str, A
     elif state == "falling-tide":
         payload["tide"] = {
             "state": "falling",
+            "level": "low",
             "next_extreme": "low",
             "minutes_to_next_extreme": 47,
         }
@@ -236,7 +239,9 @@ def create_simulator_app(
         frame rate, and 128x32x3 is only twelve kilobytes.
         """
         payload, offline, _ = _resolve(state)
-        image = DisplayRenderer(brightness=brightness).render(
+        image = DisplayRenderer.for_display(
+            get_product_config().display, brightness=brightness
+        ).render(
             payload,
             offline=offline,
             animation_phase=animation_phase(payload, elapsed, motion=motion),

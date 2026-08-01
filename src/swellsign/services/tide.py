@@ -8,11 +8,39 @@ prediction and is kept out of :class:`~swellsign.models.CurrentSnapshot`.
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
 
 from ..config import ProductConfig
 from ..models import TidePhase
 from ..storage import SQLiteRepository
+
+# Where the level bands sit within the range between two adjacent extremes.
+LOW_BAND = 1 / 3
+HIGH_BAND = 2 / 3
+
+
+def height_fraction(percent_through: float, *, rising: bool) -> float:
+    """Normalized water level between two adjacent extremes, 0 low to 1 high.
+
+    Tide is not linear in time. It lingers near the extremes and moves fastest
+    through the middle, which is why a quarter of the way through a cycle by
+    the clock is only about fifteen percent of the way up by water level. A
+    linear reading would call that MID when the sandbar is still working like
+    low. This is the standard harmonic approximation, the smooth form of the
+    rule of twelfths.
+    """
+    phase = max(0.0, min(1.0, percent_through / 100.0))
+    ascending = (1 - math.cos(math.pi * phase)) / 2
+    return ascending if rising else 1.0 - ascending
+
+
+def classify_level(fraction: float) -> str:
+    if fraction < LOW_BAND:
+        return "low"
+    if fraction < HIGH_BAND:
+        return "mid"
+    return "high"
 
 
 class TideContextService:
@@ -54,12 +82,17 @@ class TideContextService:
             int((following.predicted_at - moment).total_seconds() // 60),
         )
 
+        rising = following.kind == "high"
+        fraction = height_fraction(percent, rising=rising)
+
         return TidePhase(
             station_id=spot.tide_source.station_id,
-            state="rising" if following.kind == "high" else "falling",
+            state="rising" if rising else "falling",
             previous_extreme=previous,
             next_extreme=following,
             minutes_to_next_extreme=minutes_remaining,
             percent_through=round(percent, 1),
+            height_fraction=round(fraction, 3),
+            level=classify_level(fraction),
             datum=following.datum,
         )

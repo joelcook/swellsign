@@ -306,7 +306,10 @@ def display(
     one cycle per reported dominant period, so all three run independently.
     """
     client = DisplayClient(api_url, cache_path)
-    renderer = DisplayRenderer(brightness=day_brightness if brightness is None else brightness)
+    renderer = DisplayRenderer.for_display(
+        get_product_config().display,
+        brightness=day_brightness if brightness is None else brightness,
+    )
     output = PiMatrixOutput(brightness=matrix_brightness)
     controller = (
         None

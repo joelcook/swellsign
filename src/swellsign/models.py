@@ -170,6 +170,8 @@ class TidePhase(StrictModel):
     next_extreme: TidePrediction
     minutes_to_next_extreme: int
     percent_through: float = Field(ge=0.0, le=100.0)
+    height_fraction: float = Field(ge=0.0, le=1.0)
+    level: Literal["low", "mid", "high"]
     datum: str
 
 
@@ -332,6 +334,7 @@ class CompactTide(StrictModel):
     """
 
     state: Literal["rising", "falling"]
+    level: Literal["low", "mid", "high"]
     next_extreme: Literal["high", "low"]
     minutes_to_next_extreme: int = Field(ge=0)
 

@@ -9,6 +9,7 @@ from typing import Any
 from PIL import Image
 
 from ..models import CompactDisplayPayload, DataState, Freshness, TrendState
+from ..units import MPH_TO_KNOTS
 from .font import ADVANCE, GLYPHS, text_width
 from .palette import DEFAULT_PALETTE, Palette, dim
 
@@ -30,13 +31,15 @@ TREND_X = 68
 PERIOD_X = 76
 PERIOD_MAX_X = 106
 
-# Tide sits in the gap on the wind row between direction and speed. It is the
-# one predicted value on an otherwise measured face, so it gets a vertical
-# arrow, deliberately unlike the diagonal wave-trend mark, and the label-tier
-# warm white rather than a measurement color.
-TIDE_ARROW_X = 57
-TIDE_TEXT_X = 65
-TIDE_MAX_X = 91
+# Wind row: label, direction, speed, then tide anchored to the right edge.
+# Tide is the one predicted value on an otherwise measured face, so it gets a
+# triangle rather than the wave row's diagonal mark, and label-tier warm white
+# rather than a measurement color.
+WIND_DIR_X = 31
+WIND_SPEED_X = 53
+WIND_SPEED_MAX_X = 90
+TIDE_ARROW_WIDTH = 5
+TIDE_ARROW_GAP = 3
 
 # A solid triangle rather than a stemmed arrow: at this size a long stem under
 # a wide head reads as a dagger, and the shape stays clearly distinct from the
@@ -81,9 +84,28 @@ class DisplayRenderer:
         *,
         palette: Palette = DEFAULT_PALETTE,
         brightness: float = 0.55,
+        speed_suffix: str = "MPH",
+        speed_scale: float = 1.0,
     ) -> None:
         self.palette = palette
         self.brightness = brightness
+        # The compact payload always carries mph, since that is the published
+        # contract the firmware reads. Converting here keeps the wire format
+        # stable while letting the face speak either dialect.
+        self.speed_suffix = speed_suffix
+        self.speed_scale = speed_scale
+
+    @classmethod
+    def for_display(
+        cls,
+        display_config: Any = None,
+        **kwargs: Any,
+    ) -> DisplayRenderer:
+        """Build a renderer honoring `display.wind_speed_unit` from config."""
+        unit = getattr(display_config, "wind_speed_unit", "mph")
+        if unit == "kts":
+            return cls(speed_suffix="KTS", speed_scale=MPH_TO_KNOTS, **kwargs)
+        return cls(speed_suffix="MPH", speed_scale=1.0, **kwargs)
 
     def _color(self, color: tuple[int, int, int]) -> tuple[int, int, int]:
         return dim(color, self.brightness)
@@ -151,7 +173,7 @@ class DisplayRenderer:
         image: Image.Image,
         rising: bool,
         *,
-        x: int = TIDE_ARROW_X,
+        x: int,
         y: int = 26,
     ) -> None:
         pixels = image.load()
@@ -247,24 +269,25 @@ class DisplayRenderer:
 
         self._text(image, (MARGIN, 24), "WIND", warm)
 
-        # Tide is astronomical prediction, not measurement. It is shown only
-        # when a pair of predicted extremes brackets now; otherwise the gap
-        # stays empty rather than guessing.
-        if data.tide is not None:
-            self._tide_mark(image, data.tide.state == "rising")
-            hours = data.tide.minutes_to_next_extreme / 60
-            hours_text = f"{hours:.1f}H" if hours < 10 else f"{hours:.0f}H"
-            self._text(image, (TIDE_TEXT_X, 24), hours_text, warm, max_x=TIDE_MAX_X)
-
         if data.wind is None:
-            self._text(image, (HEIGHT_X, 24), "--", self._color(self.palette.warning_amber))
+            self._text(image, (WIND_DIR_X, 24), "--", self._color(self.palette.warning_amber))
         else:
             wind = data.wind
-            self._text(image, (HEIGHT_X, 24), (wind.direction or "--")[:3], amber)
-            speed = f"{wind.speed_mph:.0f}MPH"
-            if text_width(speed) > WIDTH - MARGIN - PERIOD_X:
-                speed = "99+MPH"
-            self._right_text(image, 24, speed, amber)
+            self._text(image, (WIND_DIR_X, 24), (wind.direction or "--")[:3], amber)
+            speed = f"{wind.speed_mph * self.speed_scale:.0f}{self.speed_suffix}"
+            if text_width(speed) > WIND_SPEED_MAX_X - WIND_SPEED_X:
+                speed = f"99+{self.speed_suffix}"
+            self._text(image, (WIND_SPEED_X, 24), speed, amber, max_x=WIND_SPEED_MAX_X)
+
+        # Tide is astronomical prediction, not measurement. It is shown only
+        # when a pair of predicted extremes brackets now; otherwise the right
+        # of the row stays empty rather than guessing.
+        if data.tide is not None:
+            level = data.tide.level.upper()
+            block = TIDE_ARROW_WIDTH + TIDE_ARROW_GAP + text_width(level)
+            start = WIDTH - MARGIN - block
+            self._tide_mark(image, data.tide.state == "rising", x=start)
+            self._text(image, (start + TIDE_ARROW_WIDTH + TIDE_ARROW_GAP, 24), level, warm)
 
         return image
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field, model_validator
@@ -77,6 +78,10 @@ class DisplayConfig(BaseModel):
     """
 
     wave_label: str | None = None
+
+    # Marine convention is knots; US surf reports usually say mph. Storage
+    # stays m/s either way and this converts at the presentation boundary.
+    wind_speed_unit: Literal["mph", "kts"] = "mph"
 
     @model_validator(mode="after")
     def _label_fits_the_field(self) -> DisplayConfig:

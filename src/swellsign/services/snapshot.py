@@ -283,6 +283,7 @@ def compact_display_payload(
             if tide is None
             else CompactTide(
                 state=tide.state,
+                level=tide.level,
                 next_extreme=tide.next_extreme.kind,
                 minutes_to_next_extreme=tide.minutes_to_next_extreme,
             )
