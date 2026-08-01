@@ -39,6 +39,23 @@ panel is grouped at the bottom, since none of it can be settled from software.
 
 ## Data
 
+- **Decide a retention policy for `raw_fetches` before deploying to a server.**
+  Measured 2026-08-01: the archive grows about 13 MB/day, roughly 4.8 GB/year,
+  and is 26% of the database already after a day and a half. Observations are
+  not the problem, since they dedupe on station, timestamp, and product; each
+  archived NDBC body is ~91 KB stored verbatim.
+
+  Growth tracks how often the upstream files *change*, not how often we poll:
+  conditional requests mean the extra 10-minute polls return 304 with empty
+  bodies, so raising the poll rate cost nothing on disk.
+
+  Annoying but survivable on a VPS, a real problem on a Pi SD card. Options:
+  prune bodies past N days while keeping the row, its `body_sha256`, and the
+  foreign keys so provenance links survive and we can still prove what was
+  received; or gzip bodies, since these are text and should compress to roughly
+  15%. Spec 7 requires raw fetches stay addressable from every normalized row,
+  which pruning the body preserves and deleting the row would not.
+
 - **41070 cannot ever show swell decomposition. Stop looking.** Verified
   2026-07-31: every spectral product 404s for this station.
 
