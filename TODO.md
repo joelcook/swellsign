@@ -5,6 +5,15 @@ panel is grouped at the bottom, since none of it can be settled from software.
 
 ## Display
 
+- **`S` and `5` are the same glyph at a glance.** They differ by two pixels out
+  of thirty-five, so `13.2S` reads as `13.25` from across the room. This is
+  worse than a collision: nothing looks broken, it just shows a plausible wrong
+  number, and period is precisely the reading that distinguishes a groundswell
+  from windslop. Options are a redesigned `S` with an open top-left, a space
+  before the unit at a cost of 6px from a tight budget, or moving the unit out
+  of the numeric run entirely. `S` after digits is the only place this bites;
+  `FT`, `MPH`, and `M` are all clearly distinct from numerals.
+
 - **Replace the single crest with a slow swell train.** The lone dot crossing
   the divider reads as a cursor, not water: it is a single object, and at a 6s
   period it moves about 21px/sec, fast enough that the eye tracks it. Anything

@@ -1,19 +1,23 @@
 # Swell Sign
 
-Swell Sign is a quiet `128×32` ocean instrument for the wall above a surfboard
-rack. Two chained `64×32` P4 HUB75 panels show the latest measured New Smyrna
-conditions:
+**No score. Just swell.**
 
-```text
-NEW SMYRNA                 12M
-SEAS  2.6FT  ↑   8.1S       NE
-WIND  W                    8MPH
-```
+![The Swell Sign showing a 2.6ft swell at 13.2 seconds from the east-northeast](docs/swell-sign.png)
 
-There is no surf score, quality color, board recommendation, or model value
-masquerading as a measurement. `SEAS` means provider-reported total sea state;
-`SWELL` appears only for a coherent provider-reported swell partition. The
-small arrow is a robust six-hour measured-height trend, not a rating.
+A quiet `128×32` ocean instrument for the wall above a surfboard rack. Two
+chained `64×32` P4 HUB75 panels answer exactly one question — *what is the
+ocean doing right now?* — and deliberately refuse to answer *is the surf good?*
+
+You get the measurement, how old it is, which direction it's moving, and the
+truth about where it came from. You supply the surf knowledge.
+
+There is no surf score, quality color, star rating, board recommendation, or
+model value masquerading as a measurement. `SEAS` means provider-reported total
+sea state; `SWELL` appears only for a coherent provider-reported swell
+partition. The small arrow is a robust six-hour measured-height trend, not a
+verdict.
+
+Every image here is rendered by the actual display code, not mocked up.
 
 The complete product and engineering contract is in
 [ocean-swell-buoy-reader-build-spec.md](ocean-swell-buoy-reader-build-spec.md).
@@ -85,6 +89,16 @@ The same renderer feeds the optional Raspberry Pi matrix adapter. Colors are
 deliberately low saturation: sea-glass cyan for water, warm white for labels,
 muted amber for wind/data delay, and restrained red only for unavailable data.
 Color never means “good” or “bad” surf.
+
+### Data states
+
+The face never hides a measurement to show a status. Trouble replaces
+decoration first: `ALT` when a disclosed fallback station is in use, `STL` with
+a three-digit age when the reading is old, and red only when data is genuinely
+unavailable — never for bad surf. Wind keeps reporting even when wave data does
+not.
+
+![Four states: fresh, ALT fallback, stale, and no wave data](docs/states.png)
 
 ### Browser panel
 
