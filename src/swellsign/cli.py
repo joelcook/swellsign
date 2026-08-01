@@ -357,6 +357,10 @@ def frame_tv(
         str,
         typer.Option(help="sign (the instrument over a photo) or editorial (typographic)."),
     ] = "sign",
+    force_after_minutes: Annotated[
+        int,
+        typer.Option(min=1, help="Re-upload even when unchanged after this long."),
+    ] = 360,
     once: Annotated[bool, typer.Option("--once", help="Push a single frame and exit.")] = False,
 ) -> None:
     """Push the rendered face to a Samsung Frame TV's Art Mode.
@@ -373,7 +377,12 @@ def frame_tv(
     composer = SnapshotComposer(repository, product_config)
     tide_service = TideContextService(repository, product_config)
     beach_wind_service = BeachWindService(repository, product_config)
-    client = FrameTvArtClient(host=host, token_file=token_file, uploads_file=uploads_file)
+    client = FrameTvArtClient(
+        host=host,
+        token_file=token_file,
+        uploads_file=uploads_file,
+        force_after_minutes=force_after_minutes,
+    )
 
     if not token_file.exists():
         typer.echo(
@@ -434,7 +443,7 @@ def frame_tv(
                 display_config=product_config.display,
             )
         content_id = client.push(image)
-        typer.echo(f"pushed {content_id or '(failed)'}")
+        typer.echo(f"pushed {content_id}" if content_id else "unchanged; skipped")
 
     push_once()
     if once:

@@ -15,10 +15,12 @@ Requires the optional dependency:
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import logging
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -55,7 +57,15 @@ class FrameTvArtClient:
     # Art Store purchases share the same MY_F identifier space, so "looks like
     # ours" is not good enough to delete on.
     uploads_file: Path | None = None
+    # Upstream publishes hourly while the loop checks every ten minutes, so
+    # most cycles would re-upload a byte-identical picture. Skipping those cuts
+    # TV writes roughly six-fold and costs nothing in freshness: the check still
+    # runs every ten minutes, so a new reading reaches the screen within one
+    # cycle of NOAA publishing it.
+    force_after_minutes: int = 360
     _uploaded: list[str] = field(default_factory=list, init=False)
+    _last_digest: str | None = field(default=None, init=False)
+    _last_push: datetime | None = field(default=None, init=False)
     _tv: Any = field(default=None, init=False)
 
     def __post_init__(self) -> None:
@@ -69,6 +79,13 @@ class FrameTvArtClient:
         except (OSError, ValueError):
             logger.warning("upload manifest unreadable; starting empty")
             return []
+        self._last_digest = data.get("last_digest")
+        stamp = data.get("last_push")
+        if stamp:
+            try:
+                self._last_push = datetime.fromisoformat(stamp)
+            except ValueError:
+                self._last_push = None
         return [str(item) for item in data.get("uploaded", [])]
 
     def _save_uploads(self) -> None:
@@ -77,7 +94,15 @@ class FrameTvArtClient:
         try:
             self.uploads_file.parent.mkdir(parents=True, exist_ok=True)
             self.uploads_file.write_text(
-                json.dumps({"host": self.host, "uploaded": self._uploaded}, indent=2),
+                json.dumps(
+                    {
+                        "host": self.host,
+                        "uploaded": self._uploaded,
+                        "last_digest": self._last_digest,
+                        "last_push": self._last_push.isoformat() if self._last_push else None,
+                    },
+                    indent=2,
+                ),
                 encoding="utf-8",
             )
         except OSError as error:
@@ -146,11 +171,28 @@ class FrameTvArtClient:
             )
         return True, f"art api {version}"
 
-    def push(self, image: Image.Image, *, show: bool = True) -> str | None:
-        """Upload one frame, optionally select it, and retire older uploads."""
+    def push(self, image: Image.Image, *, show: bool = True, force: bool = False) -> str | None:
+        """Upload one frame, optionally select it, and retire older uploads.
+
+        Returns None without uploading when the rendered image is byte-identical
+        to the last one sent, which is the common case between hourly upstream
+        publications. Hashing the rendered PNG rather than the payload is what
+        makes this correct for every layout: the sign shows an age that ticks
+        each minute and so genuinely differs every cycle, while the editorial
+        layout shows no age and only differs when a reading changes.
+        """
         buffer = io.BytesIO()
         image.save(buffer, format="PNG", optimize=True)
         payload = buffer.getvalue()
+        digest = hashlib.sha256(payload).hexdigest()
+
+        stale = True
+        if self._last_push is not None:
+            age = (datetime.now(UTC) - self._last_push).total_seconds() / 60
+            stale = age >= self.force_after_minutes
+        if not force and not stale and digest == self._last_digest:
+            logger.info("frame unchanged; skipping upload")
+            return None
 
         try:
             art = self._connect().art()
@@ -169,6 +211,8 @@ class FrameTvArtClient:
         if not content_id:
             return None
         self._uploaded.append(content_id)
+        self._last_digest = digest
+        self._last_push = datetime.now(UTC)
         # Persist before selecting: if anything below fails, the id is already
         # recorded and a later run can still retire it.
         self._save_uploads()
