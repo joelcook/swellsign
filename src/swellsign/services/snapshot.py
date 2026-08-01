@@ -18,6 +18,7 @@ from ..models import (
     Freshness,
     FreshnessLimits,
     MeasurementBasis,
+    ModeledWind,
     SourceRole,
     SpotIdentity,
     TidePhase,
@@ -216,6 +217,7 @@ def compact_display_payload(
     snapshot: CurrentSnapshot,
     product_config: ProductConfig | None = None,
     tide: TidePhase | None = None,
+    beach_wind: ModeledWind | None = None,
 ) -> CompactDisplayPayload:
     """Project the exact current snapshot into the stable sign contract.
 
@@ -262,8 +264,27 @@ def compact_display_payload(
             limits=limits_for(snapshot.wave),
         )
 
+    # Which wind reaches the face is a display decision, so it is resolved here
+    # rather than in the composer. `CurrentSnapshot` stays measurement-only
+    # whichever way it is set: the modeled value never enters it.
+    prefer_beach = (
+        product_config is not None
+        and product_config.display.wind_source == "beach"
+        and beach_wind is not None
+    )
+
     wind = None
-    if snapshot.wind is not None:
+    if prefer_beach and beach_wind is not None:
+        wind = CompactWind(
+            direction=beach_wind.direction_cardinal,
+            speed_mph=beach_wind.speed_mph,
+            observed_at=beach_wind.valid_at,
+            age_minutes=beach_wind.offset_minutes,
+            freshness=Freshness.FRESH,
+            source="model",
+            distance_m=0.0,
+        )
+    elif snapshot.wind is not None:
         wind = CompactWind(
             direction=snapshot.wind.direction_cardinal,
             speed_mph=snapshot.wind.speed_mph,
@@ -271,6 +292,8 @@ def compact_display_payload(
             age_minutes=snapshot.wind.age_minutes,
             freshness=snapshot.wind.freshness,
             limits=limits_for(snapshot.wind),
+            source="buoy",
+            distance_m=snapshot.wind.source.distance_to_spot_m,
         )
 
     return CompactDisplayPayload(

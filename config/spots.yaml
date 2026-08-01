@@ -36,6 +36,12 @@ freshness:
 display:
   wave_label: SWELL
 
+  # The configured anemometer is 31.6 km offshore, where wind runs far above
+  # what blows on the sand. No anemometer stands on the beach, so the model
+  # evaluated at the spot's own coordinates is the only available answer.
+  # /now still reports the measured buoy wind with its distance.
+  wind_source: beach
+
 trend:
   window_hours: 6
   minimum_samples: 4

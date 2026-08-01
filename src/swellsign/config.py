@@ -83,6 +83,13 @@ class DisplayConfig(BaseModel):
     # stays m/s either way and this converts at the presentation boundary.
     wind_speed_unit: Literal["mph", "kts"] = "mph"
 
+    # Which wind the face shows. "buoy" is an anemometer reading, honest but
+    # potentially far offshore where wind runs well above beach values.
+    # "beach" is a model evaluated at the spot's own coordinates: not a
+    # measurement, but the only available answer to what is blowing on the sand,
+    # and the one a surfer actually needs for offshore-versus-onshore.
+    wind_source: Literal["buoy", "beach"] = "buoy"
+
     @model_validator(mode="after")
     def _label_fits_the_field(self) -> DisplayConfig:
         if self.wave_label is not None and not 1 <= len(self.wave_label) <= 5:

@@ -24,6 +24,7 @@ from .models import (
     ForecastResponse,
     SpotIdentity,
 )
+from .services.beach_wind import BeachWindService
 from .services.snapshot import (
     SnapshotComposer,
     UnknownSpotError,
@@ -50,6 +51,7 @@ def create_app(
     resolved_repository = repository or SQLiteRepository(resolved_settings.database_path)
     resolved_composer = composer or SnapshotComposer(resolved_repository, resolved_config)
     resolved_tide = TideContextService(resolved_repository, resolved_config)
+    resolved_beach_wind = BeachWindService(resolved_repository, resolved_config)
     utc_clock = clock or (lambda: datetime.now(UTC))
 
     @asynccontextmanager
@@ -156,6 +158,7 @@ def create_app(
             snapshot,
             resolved_config,
             tide=resolved_tide.phase(spot_id, now=_aware_utc(now)),
+            beach_wind=resolved_beach_wind.current(spot_id, now=_aware_utc(now)),
         )
 
     @application.get(
@@ -181,6 +184,7 @@ def create_app(
             snapshot,
             resolved_config,
             tide=resolved_tide.phase(spot_id, now=_aware_utc(now)),
+            beach_wind=resolved_beach_wind.current(spot_id, now=_aware_utc(now)),
         )
         image = render_frame_image(
             payload,

@@ -24,6 +24,7 @@ from .display.hub75 import PiMatrixOutput
 from .display.palette import BrightnessController, BrightnessSchedule
 from .display.renderer import DisplayRenderer, animation_phase
 from .display.simulator import render_json_file
+from .services.beach_wind import BeachWindService
 from .services.collector import build_default_collection_service
 from .services.snapshot import SnapshotComposer, compact_display_payload
 from .services.tide import TideContextService
@@ -371,6 +372,7 @@ def frame_tv(
     _configure_logging(settings.log_level)
     composer = SnapshotComposer(repository, product_config)
     tide_service = TideContextService(repository, product_config)
+    beach_wind_service = BeachWindService(repository, product_config)
     client = FrameTvArtClient(host=host, token_file=token_file, uploads_file=uploads_file)
 
     if not token_file.exists():
@@ -402,6 +404,7 @@ def frame_tv(
             snapshot,
             product_config,
             tide=tide_service.phase(spot_id),
+            beach_wind=beach_wind_service.current(spot_id),
         )
         if layout == "editorial":
             if background is None:

@@ -325,8 +325,35 @@ class CompactWind(StrictModel):
     age_minutes: int
     freshness: Freshness
     limits: FreshnessLimits | None = None
+    # "buoy" is an anemometer reading; "model" is evaluated at the spot's own
+    # coordinates. A client must be able to tell them apart, because they can
+    # differ by a factor of five when the buoy is far offshore.
+    source: Literal["buoy", "model"] = "buoy"
+    distance_m: float | None = None
 
     _utc_observed = field_validator("observed_at")(require_utc)
+
+
+class ModeledWind(StrictModel):
+    """Wind at the spot itself, from a model rather than an instrument.
+
+    Carries `mode: "model"` and its provider, model, and valid time, so it can
+    never be mistaken for the measured `WindObservation`. It exists because no
+    anemometer stands on the beach and the offshore buoy is 31.6 km away, where
+    wind runs well above what is blowing on the sand.
+    """
+
+    mode: Literal["model"] = "model"
+    provider: str
+    model: str
+    valid_at: datetime
+    offset_minutes: int = Field(ge=0)
+    speed_mps: float
+    speed_mph: float
+    direction_deg_true: float
+    direction_cardinal: str | None = None
+
+    _utc_valid = field_validator("valid_at")(require_utc)
 
 
 class CompactTide(StrictModel):
