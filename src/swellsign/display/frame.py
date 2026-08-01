@@ -150,6 +150,7 @@ def render_frame_image(
     credit: str | None = None,
     placement: str = "center",
     background_dim: float = 0.25,
+    display_config: Any = None,
 ) -> Image.Image:
     """Render the face as a framed object centred on a dark field.
 
@@ -157,7 +158,9 @@ def render_frame_image(
     panel in a dim room the black is the point. The sign should read as an
     object hanging there, not as a screen showing a dashboard.
     """
-    face = DisplayRenderer(brightness=brightness).render(payload, offline=offline)
+    face = DisplayRenderer.for_display(display_config, brightness=brightness).render(
+        payload, offline=offline
+    )
     sign = enclosure(led_panel(face, cell), pad=cell * 2, radius=cell)
 
     if background is not None:

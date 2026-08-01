@@ -188,6 +188,7 @@ def create_app(
             height=height,
             cell=cell,
             brightness=brightness,
+            display_config=resolved_config.display,
         )
         buffer = io.BytesIO()
         image.save(buffer, format="PNG", optimize=True)

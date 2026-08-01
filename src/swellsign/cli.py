@@ -406,13 +406,17 @@ def frame_tv(
             if background is None:
                 typer.echo("editorial needs --background; it is a photograph layout", err=True)
                 raise typer.Exit(code=1)
+
             from .display.editorial import render_editorial_image
 
+            kts = product_config.display.wind_speed_unit == "kts"
             image = render_editorial_image(
                 payload,
                 background=background,
                 place=product_config.spots[spot_id].name,
                 credit=credit,
+                speed_suffix="kts" if kts else "mph",
+                speed_scale=0.868976242 if kts else 1.0,
             )
         else:
             image = render_frame_image(
@@ -423,6 +427,7 @@ def frame_tv(
                 credit=credit,
                 placement=placement,
                 background_dim=background_dim,
+                display_config=product_config.display,
             )
         content_id = client.push(image)
         typer.echo(f"pushed {content_id or '(failed)'}")

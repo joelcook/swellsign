@@ -103,6 +103,8 @@ def render_editorial_image(
     height: int = FRAME_HEIGHT,
     place: str | None = None,
     credit: str | None = None,
+    speed_suffix: str = "mph",
+    speed_scale: float = 1.0,
 ) -> Image.Image:
     data = (
         payload
@@ -143,7 +145,12 @@ def render_editorial_image(
         facts.append(("Period", f"{data.wave.period_s:g}s", PAPER))
         facts.append(("Swell", data.wave.direction or "--", PAPER))
     if data.wind:
-        facts.append(("Wind", f"{data.wind.direction or '--'} {data.wind.speed_mph:.0f}", AMBER))
+        # Every other value carries its unit. Without one, 9 is ambiguous
+        # between knots and mph, which is a 15% difference a surfer cares about.
+        speed = data.wind.speed_mph * speed_scale
+        facts.append(
+            ("Wind", f"{data.wind.direction or '--'} {speed:.0f}{speed_suffix}", AMBER)
+        )
     if data.tide:
         # Drawn as a polygon below; Helvetica has no U+25B2 and renders tofu.
         facts.append(("Tide", data.tide.level.title(), WARM))
