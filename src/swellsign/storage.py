@@ -741,6 +741,40 @@ class SQLiteRepository:
             _tide_from_row(next_row) if next_row is not None else None,
         )
 
+    def publication_lag_samples(self, *, hours: int = 168) -> dict[str, list[float]]:
+        """Minutes between an observation's timestamp and our first sight of it.
+
+        Uses the earliest `fetched_at` per observation, so the result is bounded
+        below by the poll interval: a station polled hourly cannot reveal a lag
+        finer than an hour. Wave and wind are pooled per station because both
+        arrive in the same provider file.
+        """
+        cutoff = _utc_text(datetime.now(UTC) - timedelta(hours=hours))
+        samples: dict[str, list[float]] = {}
+        with self._connect() as connection:
+            for table in ("wave_observations", "wind_observations"):
+                rows = connection.execute(
+                    f"""
+                    SELECT station_id, observed_at_utc, MIN(fetched_at_utc) AS first_seen
+                    FROM {table}
+                    WHERE observed_at_utc >= ?
+                    GROUP BY station_id, observed_at_utc
+                    """,
+                    (cutoff,),
+                ).fetchall()
+                for row in rows:
+                    observed = _parse_utc(row["observed_at_utc"])
+                    first_seen = _parse_utc(row["first_seen"])
+                    if observed is None or first_seen is None:
+                        continue
+                    minutes = (first_seen - observed).total_seconds() / 60
+                    # Negative means a clock problem; absurdly large means the
+                    # row was backfilled from a bulk file rather than watched
+                    # arriving. Neither describes publication lag.
+                    if 0 <= minutes <= 720:
+                        samples.setdefault(row["station_id"], []).append(minutes)
+        return samples
+
     def get_validator(self, key: str) -> tuple[str | None, str | None]:
         """Read the stored ETag/Last-Modified pair for a conditional request."""
         with self._connect() as connection:

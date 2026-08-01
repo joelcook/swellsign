@@ -147,6 +147,53 @@ def tide_context(
     typer.echo(phase.model_dump_json(indent=2))
 
 
+@app.command("lag")
+def publication_lag(
+    hours: Annotated[int, typer.Option(min=1, help="How far back to look.")] = 168,
+) -> None:
+    """Measure how long a provider takes to publish an observation.
+
+    Freshness multipliers are currently an estimate. This reports the real gap
+    between an observation's measurement time and the moment we first saw it,
+    which is what those thresholds should actually be derived from. Accuracy is
+    bounded by the poll interval, so run the collector continuously first.
+    """
+    import statistics
+
+    _, product_config, repository = _runtime()
+    rows = repository.publication_lag_samples(hours=hours)
+    if not rows:
+        typer.echo("no samples yet; run `swellsign collector` for a while first")
+        return
+
+    report: dict[str, object] = {"window_hours": hours, "stations": {}}
+    for station_id, lags in sorted(rows.items()):
+        ordered = sorted(lags)
+        interval = product_config.stations[station_id].expected_interval_minutes or 0
+        poll = product_config.station_interval_minutes(station_id, 20)
+        median = statistics.median(ordered)
+        p90 = ordered[min(len(ordered) - 1, int(len(ordered) * 0.9))]
+        # Worst realistic age is the slowest publication plus one full
+        # reporting cycle, since that is just before the next one lands.
+        suggested_fresh = int(p90 + interval)
+        report["stations"][station_id] = {
+            "samples": len(ordered),
+            "poll_interval_minutes": poll,
+            "reporting_interval_minutes": interval,
+            "publication_lag_minutes": {
+                "min": round(min(ordered), 1),
+                "median": round(median, 1),
+                "p90": round(p90, 1),
+                "max": round(max(ordered), 1),
+            },
+            "configured_fresh_minutes": (
+                product_config.freshness_for(station_id).fresh_max_age_minutes
+            ),
+            "suggested_fresh_minutes": suggested_fresh,
+        }
+    typer.echo(json.dumps(report, indent=2))
+
+
 @app.command("collector")
 def collector() -> None:
     """Run observation, forecast, and tide collection on independent schedules."""

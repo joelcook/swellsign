@@ -261,7 +261,12 @@ class CollectionService:
         next_forecast = loop.time()
         next_tide = loop.time()
         forecast_interval_seconds = self.product_config.forecast.collection_interval_minutes * 60
-        observation_interval_seconds = observation_interval_minutes * 60
+        # The loop must tick at least as fast as the most frequently polled
+        # station, or per-station intervals shorter than the default could
+        # never fire. Each station is still gated individually inside the call.
+        observation_interval_seconds = (
+            self._observation_tick_minutes(observation_interval_minutes) * 60
+        )
         tide_interval_seconds = self._tide_interval_minutes() * 60
 
         while not stop.is_set():
@@ -287,6 +292,14 @@ class CollectionService:
             delay = max(0.1, min(due) - loop.time())
             with suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=min(delay, 30))
+
+    def _observation_tick_minutes(self, default_minutes: int) -> int:
+        intervals = [
+            self.product_config.station_interval_minutes(station.id, default_minutes)
+            for station in self.product_config.stations.values()
+            if {"waves", "wind", "separated_swell"}.intersection(station.capabilities)
+        ]
+        return max(1, min([default_minutes, *intervals]))
 
     def _tide_interval_minutes(self) -> int:
         intervals = [

@@ -191,13 +191,24 @@ class ProductConfig(BaseModel):
         )
 
     def station_interval_minutes(self, station_id: str, default_minutes: int) -> int:
-        """Poll cadence for one station.
+        """How often to ask this station, in minutes.
 
-        A station that reports hourly gains nothing from a twenty-minute poll,
-        and NOAA gains nothing from serving it.
+        An explicit `poll_interval_minutes` always wins, including when it is
+        faster than the station reports. That is deliberate: a provider stamps
+        an observation with its measurement time and publishes it later, so
+        polling only as often as the station reports can leave the sign a full
+        reporting cycle behind whatever is actually available. Conditional
+        requests make the extra asks cost a 304 apiece.
+
+        With no explicit value, fall back to the reporting cadence, since a
+        station that reports hourly gains nothing from a faster blind poll.
         """
         station = self.stations.get(station_id)
-        declared = station.expected_interval_minutes if station is not None else None
+        if station is None:
+            return default_minutes
+        if station.poll_interval_minutes and station.poll_interval_minutes > 0:
+            return station.poll_interval_minutes
+        declared = station.expected_interval_minutes
         if declared is None or declared <= 0:
             return default_minutes
         return max(default_minutes, declared)

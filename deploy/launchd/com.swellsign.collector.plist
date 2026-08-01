@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Keeps the collector running on a Mac between now and the Raspberry Pi.
+
+  Install:
+    cp deploy/launchd/com.swellsign.collector.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.swellsign.collector.plist
+
+  Stop:
+    launchctl unload ~/Library/LaunchAgents/com.swellsign.collector.plist
+
+  Edit the two absolute paths below if the project or interpreter moves; launchd
+  runs with a minimal environment and will not resolve them from a shell PATH.
+
+  The collector takes an exclusive lock on the database, so a second copy exits
+  rather than double-polling. Stop any ad-hoc `swellsign collector` before
+  loading this, or KeepAlive will restart it against a held lock.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.swellsign.collector</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3</string>
+        <string>-m</string>
+        <string>swellsign</string>
+        <string>collector</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/joelcook/Developer/swellsign</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>/Users/joelcook/Developer/swellsign/src</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Back off before restarting so a provider outage does not become a
+         tight crash loop against NOAA. -->
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/joelcook/Developer/swellsign/data/collector.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/joelcook/Developer/swellsign/data/collector.log</string>
+
+    <!-- Background priority: this is an appliance, not something the user is
+         waiting on. -->
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>LowPriorityIO</key>
+    <true/>
+</dict>
+</plist>

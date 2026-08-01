@@ -57,6 +57,7 @@ stations:
     latitude: 29.025
     longitude: -80.884
     expected_interval_minutes: 60
+    poll_interval_minutes: 10
     capabilities: [waves, water_temperature]
     attribution: NOAA National Data Buoy Center
   ndbc:41069:
@@ -68,6 +69,7 @@ stations:
     latitude: 29.025
     longitude: -80.884
     expected_interval_minutes: 60
+    poll_interval_minutes: 10
     capabilities: [wind]
     attribution: NOAA National Data Buoy Center
   ndbc:41113:
@@ -79,6 +81,7 @@ stations:
     latitude: 28.400
     longitude: -80.533
     expected_interval_minutes: 30
+    poll_interval_minutes: 10
     capabilities: [waves, separated_swell]
     attribution: NOAA NDBC / CDIP
   # Subordinate high/low prediction station. It publishes no live observed

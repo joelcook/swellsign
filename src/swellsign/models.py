@@ -95,7 +95,13 @@ class Station(StrictModel):
     water_depth_m: float | None = None
     platform_type: str | None = None
     active_status: str = "active"
+    # How often the station reports. Drives freshness thresholds.
     expected_interval_minutes: int | None = None
+    # How often we ask. Defaults to the reporting interval, but the two are
+    # different questions: conditional requests make an unchanged resource cost
+    # one 304, so asking more often than the station reports is nearly free and
+    # cuts the delay between publication and the sign showing it.
+    poll_interval_minutes: int | None = None
     capabilities: list[str] = Field(default_factory=list)
     attribution: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
