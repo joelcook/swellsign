@@ -354,9 +354,9 @@ def frame_tv(
 
     if not token_file.exists():
         typer.echo(
-            f"First connection to {host}. The TV will show an 'allow this device?' "
-            "prompt naming Swell Sign — accept it on screen within 45 seconds. "
-            "The approval is cached, so this is asked once.",
+            f"First connection to {host}. The TV must be in Art Mode, not showing "
+            "an input — the art channel does not answer otherwise. Some models "
+            "also prompt on screen to allow the device; accept it if it appears.",
         )
 
     if not client.supported():
@@ -366,6 +366,14 @@ def frame_tv(
             err=True,
         )
         raise typer.Exit(code=1)
+
+    # supported() is true for any Frame; it does not prove the art channel will
+    # answer. Checking here converts a silent hang into an explanation.
+    is_ready, detail = client.ready()
+    if not is_ready:
+        typer.echo(detail, err=True)
+        raise typer.Exit(code=1)
+    typer.echo(f"connected to {host} ({detail})")
 
     def push_once() -> None:
         snapshot = composer.compose(spot_id)

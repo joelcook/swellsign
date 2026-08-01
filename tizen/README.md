@@ -52,8 +52,10 @@ PYTHONPATH=src python3 -m swellsign frame-tv --host 192.168.1.50 --once
 PYTHONPATH=src python3 -m swellsign frame-tv --host 192.168.1.50
 ```
 
-The first connection makes the TV show an "allow this device?" prompt. Accept
-it; the token is cached in `data/frame-tv-token.txt` so it is asked once.
+**The TV must be in Art Mode**, not powered on showing an input. In that state
+the websocket connects and then every art command times out silently, which
+looks exactly like a broken library. Verified on a 2025 LS03F. Some models also
+prompt on screen to allow the device; accept it if it appears.
 
 The uploader deletes its own previous uploads and keeps a rolling window of two,
 because the TV stores a finite number of images and pushing every fifteen

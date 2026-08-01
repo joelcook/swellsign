@@ -82,6 +82,35 @@ class FrameTvArtClient:
             logger.warning("art mode probe failed", extra={"error": str(error)})
             return False
 
+    def ready(self) -> tuple[bool, str]:
+        """Check the art channel actually answers, not merely that it exists.
+
+        `supported()` reads REST device info and returns True on any Frame, even
+        when art commands will never reply. Verified on a 2025 LS03F: with the
+        TV powered on but showing an input, the websocket connects and registers
+        a client, then every art command times out silently. The channel only
+        responds once the TV is in Art Mode.
+
+        This turns that hang into a sentence.
+        """
+        try:
+            art = self._connect().art()
+        except RuntimeError:
+            raise
+        except Exception as error:
+            return False, f"could not reach {self.host}: {error}"
+
+        try:
+            version = art.get_api_version()
+        except Exception:
+            return False, (
+                f"{self.host} accepted the connection but its art channel did not "
+                "answer. The TV is most likely powered on showing an input rather "
+                "than in Art Mode; the channel only responds in Art Mode. Press the "
+                "power button once to switch to Art Mode, then retry."
+            )
+        return True, f"art api {version}"
+
     def push(self, image: Image.Image, *, show: bool = True) -> str | None:
         """Upload one frame, optionally select it, and retire older uploads."""
         buffer = io.BytesIO()

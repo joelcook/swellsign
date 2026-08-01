@@ -113,36 +113,25 @@ panel is grouped at the bottom, since none of it can be settled from software.
   buoy was recovered on 2026-04-27. Do not configure it as a live source until
   deployment and reporting are independently verified.
 
-## Frame TV Art Mode — blocked on a protocol mismatch
+## Frame TV Art Mode — working
 
-Diagnosed 2026-08-01 against a real QN50LS03FAFXZA (LS03F, the 2025 Frame
-generation). Everything up to the art channel works:
+Resolved 2026-08-01 on a QN50LS03FAFXZA (LS03F, 2025 generation), art api
+5.0.1.0. Frames push and display correctly.
 
-```
-REST /api/v2/     PowerState on, FrameTVSupport true, TokenAuthSupport true
-websocket         ms.channel.connect received, client registered, no prompt
-art().supported() True, instantly
-art().get_api_version()   websocket timeout
-async fork        ConnectionFailure: {'event': 'ms.channel.timeOut'}
-```
+The cause of the initial hang was **the TV not being in Art Mode**. Powered on
+but showing an input, the websocket connects and registers a client, then every
+art command times out silently — no error, no prompt, nothing. It was neither a
+pairing problem nor the protocol mismatch it resembled. `FrameTvArtClient.ready()`
+now probes `get_api_version()` and explains this instead of hanging.
 
-So the TV accepts the socket and then refuses to answer art commands. Both
-`xchwarze/samsung-tv-ws-api` (upstream, what we depend on) and
-`NickWaterton/samsung-tv-ws-api` (the fork maintained for newer Frames, which
-claims support through the 2024 LS03D) fail the same way. This TV is one
-generation newer than either library documents.
+Worth knowing: `supported()` returns True on any Frame regardless of state, so
+it cannot be used as a readiness check. No token file is written on this model;
+the art channel accepted the connection without one despite
+`TokenAuthSupport: true`.
 
-Worth trying before writing more code, in order of likelihood:
-
-1. **Settings → General → External Device Manager → Device Connect Manager** —
-   set Access Notification to First Time Only and confirm this Mac is allowed in
-   Device List. A denial here produces exactly this silent channel timeout.
-2. Put the TV in **Art Mode** rather than watching an input, then retry.
-3. Check whether the fork has newer commits addressing 2025 models.
-
-**This does not block the TV app.** The Tizen path talks HTTP to our own server
-and never touches the Samsung art API, so Stage 3 can proceed regardless. Art
-Mode is the ambient-while-off variant, not the product.
+Still unverified: how the uploader behaves over many hours, in particular
+whether retiring older uploads leaves Art Mode on a blank slot when it deletes
+an image the TV is mid-transition to.
 
 ## Hardware, blocked on buying panels
 
