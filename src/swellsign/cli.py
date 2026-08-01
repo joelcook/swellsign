@@ -335,6 +335,18 @@ def frame_tv(
     brightness: Annotated[float, typer.Option(min=0.0, max=1.0)] = 0.55,
     cell: Annotated[int, typer.Option(min=4, max=40, help="LED size in pixels.")] = 20,
     token_file: Annotated[Path, typer.Option()] = Path("data/frame-tv-token.txt"),
+    background: Annotated[
+        Path | None,
+        typer.Option(help="Photo to sit behind the sign. Omit for a dark field."),
+    ] = None,
+    credit: Annotated[
+        str | None,
+        typer.Option(help="Attribution line composited into the frame."),
+    ] = None,
+    placement: Annotated[
+        str,
+        typer.Option(help="Where the sign sits: center or lower."),
+    ] = "center",
     once: Annotated[bool, typer.Option("--once", help="Push a single frame and exit.")] = False,
 ) -> None:
     """Push the rendered face to a Samsung Frame TV's Art Mode.
@@ -382,7 +394,14 @@ def frame_tv(
             product_config,
             tide=tide_service.phase(spot_id),
         )
-        image = render_frame_image(payload, cell=cell, brightness=brightness)
+        image = render_frame_image(
+            payload,
+            cell=cell,
+            brightness=brightness,
+            background=background,
+            credit=credit,
+            placement=placement,
+        )
         content_id = client.push(image)
         typer.echo(f"pushed {content_id or '(failed)'}")
 
