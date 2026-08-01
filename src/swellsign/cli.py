@@ -351,6 +351,10 @@ def frame_tv(
         float,
         typer.Option(min=0.0, max=1.0, help="Uniformly darken the photo. 0 leaves it alone."),
     ] = 0.0,
+    layout: Annotated[
+        str,
+        typer.Option(help="sign (the instrument over a photo) or editorial (typographic)."),
+    ] = "sign",
     once: Annotated[bool, typer.Option("--once", help="Push a single frame and exit.")] = False,
 ) -> None:
     """Push the rendered face to a Samsung Frame TV's Art Mode.
@@ -398,15 +402,28 @@ def frame_tv(
             product_config,
             tide=tide_service.phase(spot_id),
         )
-        image = render_frame_image(
-            payload,
-            cell=cell,
-            brightness=brightness,
-            background=background,
-            credit=credit,
-            placement=placement,
-            background_dim=background_dim,
-        )
+        if layout == "editorial":
+            if background is None:
+                typer.echo("editorial needs --background; it is a photograph layout", err=True)
+                raise typer.Exit(code=1)
+            from .display.editorial import render_editorial_image
+
+            image = render_editorial_image(
+                payload,
+                background=background,
+                place=product_config.spots[spot_id].name,
+                credit=credit,
+            )
+        else:
+            image = render_frame_image(
+                payload,
+                cell=cell,
+                brightness=brightness,
+                background=background,
+                credit=credit,
+                placement=placement,
+                background_dim=background_dim,
+            )
         content_id = client.push(image)
         typer.echo(f"pushed {content_id or '(failed)'}")
 

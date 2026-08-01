@@ -1,0 +1,57 @@
+[
+ {
+  "spot": "13TH STREET",
+  "region": "North Florida",
+  "buoy": "41113",
+  "height_ft": 1.0,
+  "period_s": 10.0,
+  "dir": "E",
+  "wind_dir": "SSE",
+  "wind_mph": 9,
+  "facing": 148.6852040414
+ },
+ {
+  "spot": "7TH AVENUE",
+  "region": "North Florida",
+  "buoy": "41117",
+  "height_ft": 1.6,
+  "period_s": 10.0,
+  "dir": "E",
+  "wind_dir": "W",
+  "wind_mph": 9,
+  "facing": 80.0
+ },
+ {
+  "spot": "ANCLOTE ISLAND",
+  "region": "Florida",
+  "buoy": "42098",
+  "height_ft": 2.6,
+  "period_s": 5.0,
+  "dir": "WNW",
+  "wind_dir": "WSW",
+  "wind_mph": 11,
+  "facing": 295.0
+ },
+ {
+  "spot": "CORNERS",
+  "region": "North Florida",
+  "buoy": "41112",
+  "height_ft": 1.6,
+  "period_s": 4.0,
+  "dir": "SE",
+  "wind_dir": "SSW",
+  "wind_mph": 5,
+  "facing": 95.0
+ },
+ {
+  "spot": "PORT ST.JOE CAPE",
+  "region": "Florida",
+  "buoy": "42099",
+  "height_ft": 2.6,
+  "period_s": 5.0,
+  "dir": "WNW",
+  "wind_dir": "WSW",
+  "wind_mph": 2,
+  "facing": 245.0
+ }
+]

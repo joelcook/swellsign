@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Swell Sign — shop display concepts</title>
+<style>
+  :root {
+    --glass: #4fbdb4;
+    --warm:  #d8c9a6;
+    --amber: #d2823a;
+    --dim:   #6b7578;
+    --ink:   #07090a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0c0d; color: #8b9599;
+    font: 13px/1.5 ui-monospace, Menlo, monospace;
+    display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 18px;
+  }
+  nav { display: flex; gap: 8px; }
+  nav button {
+    font: inherit; padding: 7px 14px; cursor: pointer; letter-spacing: .1em;
+    background: #101314; color: #8b9599; border: 1px solid #23282a; border-radius: 4px;
+    text-transform: uppercase;
+  }
+  nav button[aria-pressed="true"] { color: var(--glass); border-color: var(--glass); }
+  .stage {
+    width: min(96vw, 1600px); aspect-ratio: 16/9; position: relative;
+    box-shadow: 0 30px 70px -20px #000; border-radius: 3px; overflow: hidden;
+    background: var(--ink);
+  }
+  .concept { position: absolute; inset: 0; display: none; }
+  .concept.on { display: block; }
+  .caption { max-width: 90ch; text-align: center; color: #6b7578; }
+  .caption b { color: var(--warm); font-weight: 600; }
+
+  /* ---------------------------------------------------------------- BOARD */
+  /* A departure board is the right metaphor for a shop: it is communal
+     information you scan and act on, and crucially it never tells you whether
+     your flight is *good*. Same posture as the sign. */
+  .board { height: 100%; background: var(--ink); padding: 3.2% 4%; display: flex; flex-direction: column; }
+  .board-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 1px solid #1c2224; padding-bottom: 1.6%;
+  }
+  .board-head h1 {
+    font-size: clamp(14px, 1.9vw, 30px); letter-spacing: .34em; color: var(--warm);
+    font-weight: 500; text-transform: uppercase;
+  }
+  .board-head .clock { font-size: clamp(12px, 1.5vw, 24px); color: var(--dim); letter-spacing: .18em; }
+  .cols, .row {
+    display: grid; grid-template-columns: 2.6fr 1fr 1fr .8fr 1.3fr 1fr;
+    align-items: center; gap: 2%;
+  }
+  .cols {
+    font-size: clamp(8px, .82vw, 13px); letter-spacing: .26em; color: #4a5254;
+    text-transform: uppercase; padding: 1.5% 0 .8%;
+  }
+  .rows { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; }
+  .row {
+    font-size: clamp(15px, 2.5vw, 42px); font-variant-numeric: tabular-nums;
+    padding: .5% 0; border-bottom: 1px solid #121718;
+  }
+  .row .name { color: var(--warm); letter-spacing: .07em; white-space: nowrap;
+               overflow: hidden; text-overflow: ellipsis; }
+  .row .ht, .row .pd, .row .dr { color: var(--glass); }
+  .row .wd { color: var(--amber); }
+  .row .td { color: var(--dim); font-size: .74em; letter-spacing: .12em; }
+  .row .unit { font-size: .52em; color: #5d6668; margin-left: .18em; letter-spacing: .08em; }
+  .board-foot {
+    display: flex; justify-content: space-between; color: #3b4344;
+    font-size: clamp(8px, .82vw, 13px); letter-spacing: .2em; padding-top: 1.4%;
+    text-transform: uppercase;
+  }
+
+  /* ------------------------------------------------------------- EDITORIAL */
+  /* Décor first. A shop owner hangs this because the room looks better with
+     it, and it happens to answer the question. */
+  .ed { height: 100%; position: relative; }
+  .ed img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ed .veil {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(4,6,7,.94) 16%, rgba(4,6,7,.45) 46%, rgba(4,6,7,.1) 74%);
+  }
+  .ed .body { position: absolute; inset: auto 0 0 0; padding: 0 5% 4.5%; }
+  .ed .place {
+    font-size: clamp(9px, 1.05vw, 17px); letter-spacing: .5em; color: var(--glass);
+    text-transform: uppercase; margin-bottom: 1.4%;
+  }
+  .ed .hero {
+    display: flex; align-items: flex-end; gap: clamp(24px,4vw,72px); flex-wrap: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .ed .big {
+    font-size: clamp(46px, 9.4vw, 168px); line-height: .82; color: #f2ece0;
+    font-family: "Helvetica Neue", Arial, sans-serif; font-weight: 200; letter-spacing: -.02em;
+  }
+  .ed .big i { font-style: normal; font-size: .3em; color: var(--dim); letter-spacing: .06em; }
+  .ed .facts { display: grid; grid-auto-flow: column; gap: clamp(18px,3vw,54px);
+             padding-bottom: 2.2%; }
+  .ed .fact { white-space: nowrap; }
+  .ed .fact .k {
+    font-size: clamp(8px, .82vw, 13px); letter-spacing: .3em; color: #596366;
+    text-transform: uppercase; margin-bottom: .5em;
+  }
+  .ed .fact .v {
+    font-size: clamp(17px, 2.7vw, 46px); color: var(--warm);
+    font-family: "Helvetica Neue", Arial, sans-serif; font-weight: 300;
+  }
+  .ed .fact .v.w { color: var(--amber); }
+  .ed .credit {
+    position: absolute; right: 5%; bottom: 2.2%;
+    font-size: clamp(7px, .68vw, 11px); letter-spacing: .22em; color: #454d4f;
+  }
+
+  /* ---------------------------------------------------------------- RACK */
+  /* Keeps the instrument. A wall of small identical faces, the way a shop
+     already has a rack of boards or a row of tide clocks. */
+  .rack { height: 100%; background: var(--ink); padding: 3% 4%; display: flex; flex-direction: column; }
+  .rack h1 {
+    font-size: clamp(11px, 1.35vw, 22px); letter-spacing: .42em; color: var(--warm);
+    text-transform: uppercase; font-weight: 500; margin-bottom: 2%;
+  }
+  .panels { flex: 1; display: flex; flex-direction: column; gap: 1.8%; }
+  .panel {
+    flex: 1; background: #0e1113; border: 1px solid #1e2426; border-radius: 6px;
+    display: flex; align-items: center; padding: 0 2.4%; gap: 3%;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
+  }
+  .panel canvas { height: 62%; width: auto; image-rendering: pixelated; }
+  .panel .meta { margin-left: auto; text-align: right; color: #4b5457; }
+  .panel .meta .b { font-size: clamp(8px, .78vw, 12px); letter-spacing: .2em; }
+  #board2 .cols, #board2 .row {
+    grid-template-columns: 2.4fr 1fr 1fr 1.5fr 1.1fr;
+  }
+  #board2 .row { font-size: clamp(13px, 2.05vw, 34px); }
+</style>
+</head>
+<body>
+
+<nav>
+  <button data-c="board" aria-pressed="true">Departure board</button>
+  <button data-c="ed" aria-pressed="false">Editorial</button>
+  <button data-c="both" aria-pressed="false">Board over photo</button>
+</nav>
+
+<div class="stage">
+  <!-- BOARD -->
+  <section class="concept on" id="c-board">
+    <div class="board">
+      <div class="board-head">
+        <h1>Florida</h1>
+        <div class="clock" id="clock"></div>
+      </div>
+      <div class="cols">
+        <div>Break</div><div>Height</div><div>Period</div><div>Dir</div><div>Wind</div><div>Tide</div>
+      </div>
+      <div class="rows" id="rows"></div>
+      <div class="board-foot">
+        <div>NOAA NDBC · measured, not forecast</div>
+        <div>No score. Just swell.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EDITORIAL -->
+  <section class="concept" id="c-ed">
+    <div class="ed">
+      <img src="hero.jpg" alt="" />
+      <div class="veil"></div>
+      <div class="body">
+        <div class="place" id="ed-place"></div>
+        <div class="hero">
+          <div class="big" id="ed-big"></div>
+          <div class="facts" id="ed-facts"></div>
+        </div>
+      </div>
+      <div class="credit">PEXELS · FREE TO USE</div>
+    </div>
+  </section>
+
+  <!-- BOARD OVER PHOTO -->
+  <section class="concept" id="c-both">
+    <div class="ed" style="position:absolute;inset:0">
+      <img src="hero.jpg" alt="" />
+      <div class="veil" style="background:linear-gradient(to right, rgba(4,6,7,.97) 42%, rgba(4,6,7,.55) 72%, rgba(4,6,7,.25) 100%)"></div>
+    </div>
+    <div class="board" id="board2" style="position:absolute;inset:0;background:transparent;width:64%">
+      <div class="board-head">
+        <h1>Florida</h1><div class="clock" id="clock2"></div>
+      </div>
+      <div class="cols"><div>Break</div><div>Height</div><div>Period</div><div>Wind</div><div>Tide</div></div>
+      <div class="rows" id="rows2"></div>
+      <div class="board-foot"><div>NOAA NDBC · measured</div><div>No score. Just swell.</div></div>
+    </div>
+  </section>
+</div>
+
+<p class="caption" id="cap"></p>
+
+<script>
+(async () => {
+  const data = await (await fetch('data.json')).json();
+  const PAL = { glass:'#238e87', warm:'#a19274', amber:'#a55d22', dim:'#122d2c' };
+
+  // ---- board
+  const tides = ['▲ HIGH','▼ MID','▼ LOW','▲ MID','▲ HIGH'];
+  document.getElementById('rows').innerHTML = data.map((s,i) => `
+    <div class="row">
+      <div class="name">${s.spot}</div>
+      <div class="ht">${s.height_ft}<span class="unit">FT</span></div>
+      <div class="pd">${s.period_s}<span class="unit">S</span></div>
+      <div class="dr">${s.dir ?? '--'}</div>
+      <div class="wd">${s.wind_dir ?? '--'} ${s.wind_mph}<span class="unit">MPH</span></div>
+      <div class="td">${tides[i % tides.length]}</div>
+    </div>`).join('');
+  const tick = () => document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}).toUpperCase();
+  tick(); setInterval(tick, 10000);
+
+  // ---- editorial
+  const h = data[0];
+  document.getElementById('ed-place').textContent = h.spot + ' · ' + h.region;
+  document.getElementById('ed-big').innerHTML = `${h.height_ft}<i>FT</i>`;
+  document.getElementById('ed-facts').innerHTML = `
+    <div class="fact"><div class="k">Period</div><div class="v">${h.period_s}s</div></div>
+    <div class="fact"><div class="k">Swell</div><div class="v">${h.dir ?? '--'}</div></div>
+    <div class="fact"><div class="k">Wind</div><div class="v w">${h.wind_dir} ${h.wind_mph}</div></div>
+    <div class="fact"><div class="k">Tide</div><div class="v">▼ Low</div></div>`;
+
+  document.getElementById('rows2').innerHTML = data.map((s,i) => `
+    <div class="row">
+      <div class="name">${s.spot}</div>
+      <div class="ht">${s.height_ft}<span class="unit">FT</span></div>
+      <div class="pd">${s.period_s}<span class="unit">S</span></div>
+      <div class="wd">${s.wind_dir ?? '--'} ${s.wind_mph}<span class="unit">MPH</span></div>
+      <div class="td">${tides[i % tides.length]}</div>
+    </div>`).join('');
+  const tick2 = () => document.getElementById('clock2').textContent =
+    new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}).toUpperCase();
+  tick2(); setInterval(tick2, 10000);
+
+  // ---- (rack concept retired)
+  /*
+  // The shipped version would receive rendered pixels from Python, exactly as
+  // the browser panel and the Frame do, so no layout logic lives here.
+  const FONT = {}; // drawn as blocks; fidelity is not the point of a mock
+  function face(canvas, s) {
+    const W=128,H=32,CELL=6;
+    canvas.width=W*CELL; canvas.height=H*CELL;
+    const g=canvas.getContext('2d');
+    g.fillStyle='#000'; g.fillRect(0,0,canvas.width,canvas.height);
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+      g.fillStyle='rgba(255,255,255,.022)';
+      g.beginPath(); g.arc(x*CELL+CELL/2,y*CELL+CELL/2,1,0,6.29); g.fill();
+    }
+    const put=(txt,cx,cy,col)=>{
+      g.font=`${CELL*7}px ui-monospace, monospace`; g.textBaseline='top';
+      g.fillStyle=col; g.fillText(txt, cx*CELL, cy*CELL-2);
+    };
+    put(s.spot.slice(0,11), 1, 1, PAL.warm);
+    put(`${s.height_ft}FT ${s.period_s}S ${s.dir??'--'}`, 1, 12, PAL.glass);
+    put(`WIND ${s.wind_dir??'--'} ${s.wind_mph}`, 1, 23, PAL.amber);
+  }
+  document.getElementById('panels').innerHTML = data.slice(0,4).map((s,i)=>`
+    <div class="panel"><canvas id="f${i}"></canvas>
+      <div class="meta"><div class="b">BUOY ${s.buoy}</div></div></div>`).join('');
+  */
+
+  // ---- switcher
+  const caps = {
+    board: '<b>Departure board.</b> The right metaphor for a shop: communal information you scan and act on — and a departure board never tells you whether your flight is <i>good</i>. Same posture as the sign. Reads from across a room, holds many breaks, and looks deliberate rather than like a dashboard.',
+    ed: '<b>Editorial.</b> Décor first. The owner hangs it because the room looks better, and it happens to answer the question. Strongest at a distance and in a photo-led space, weakest if a customer wants five breaks at once.',
+    both: '<b>Board over photo.</b> The information density of the board with the warmth of the place. The photo earns its keep as atmosphere rather than competing for attention, and the gradient keeps every row legible. This is the one I would build.',
+  };
+  const show = c => {
+    document.querySelectorAll('.concept').forEach(n=>n.classList.toggle('on', n.id==='c-'+c));
+    document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.c===c)));
+    document.getElementById('cap').innerHTML = caps[c];
+  };
+  document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>show(b.dataset.c)));
+  show('board');
+})();
+</script>
+</body>
+</html>
