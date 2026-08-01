@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import io
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.responses import JSONResponse
 
 from .config import (
@@ -16,6 +17,7 @@ from .config import (
     get_product_config,
     get_settings,
 )
+from .display.frame import render_frame_image
 from .models import (
     CompactDisplayPayload,
     CurrentSnapshot,
@@ -155,6 +157,41 @@ def create_app(
             resolved_config,
             tide=resolved_tide.phase(spot_id, now=_aware_utc(now)),
         )
+
+    @application.get(
+        "/v1/spots/{spot_id}/frame.png",
+        responses={200: {"content": {"image/png": {}}}},
+        response_class=Response,
+    )
+    def frame_image(
+        spot_id: str,
+        width: Annotated[int, Query(ge=640, le=3840)] = 3840,
+        height: Annotated[int, Query(ge=360, le=2160)] = 2160,
+        cell: Annotated[int, Query(ge=4, le=40)] = 20,
+        brightness: Annotated[float, Query(ge=0.0, le=1.0)] = 0.55,
+    ) -> Response:
+        """The sign rendered large, for a screen rather than a panel.
+
+        Server-rendered so a TV cannot drift from the physical sign, and so
+        the client stays as thin as an `<img>` tag.
+        """
+        now = utc_clock()
+        snapshot = _compose_or_404(resolved_composer, spot_id, now)
+        payload = compact_display_payload(
+            snapshot,
+            resolved_config,
+            tide=resolved_tide.phase(spot_id, now=_aware_utc(now)),
+        )
+        image = render_frame_image(
+            payload,
+            width=width,
+            height=height,
+            cell=cell,
+            brightness=brightness,
+        )
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG", optimize=True)
+        return Response(content=buffer.getvalue(), media_type="image/png")
 
     @application.get("/v1/spots/{spot_id}/history")
     def history(

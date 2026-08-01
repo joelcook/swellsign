@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Swell Sign</title>
+<style>
+  /* The TV is a panel, same as the HUB75 one. The backend renders the frame;
+     this displays it. No layout logic lives here, so the app can never drift
+     from what the physical sign shows. */
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #090a0b;
+    overflow: hidden;
+    font: 22px/1.5 ui-monospace, monospace;
+    color: #6d787c;
+  }
+  #frame {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    /* Cross-fade rather than snap, so a refresh in a dark room is not a
+       flash in the corner of your eye. */
+    transition: opacity 600ms ease;
+  }
+  #frame.swapping { opacity: 0; }
+  #status {
+    position: fixed;
+    left: 48px;
+    bottom: 40px;
+    opacity: 0;
+    transition: opacity 400ms ease;
+  }
+  #status.show { opacity: 1; }
+  /* Tizen requires a visible loading state for requests over ~3 seconds. */
+  #spinner {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    font-size: 18px;
+  }
+  #spinner.hidden { display: none; }
+</style>
+</head>
+<body>
+  <img id="frame" alt="Current ocean conditions" />
+  <div id="spinner">loading</div>
+  <div id="status"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // Point this at your server. Over a Cloudflare Tunnel this is the public
+  // hostname; on the LAN it is the machine running `swellsign api`.
+  var API = "http://127.0.0.1:8000";
+  var SPOT = "new-smyrna";
+
+  // The backend polls NOAA every ten minutes, so refreshing faster than this
+  // only burns bandwidth. Cache headers mean most of these never reach SQLite.
+  var REFRESH_MS = 5 * 60 * 1000;
+  var RETRY_MS = 30 * 1000;
+
+  var frame = document.getElementById("frame");
+  var spinner = document.getElementById("spinner");
+  var status = document.getElementById("status");
+  var failures = 0;
+
+  function show(message, sticky) {
+    status.textContent = message || "";
+    status.classList.toggle("show", Boolean(message));
+    if (message && !sticky) {
+      setTimeout(function () { status.classList.remove("show"); }, 4000);
+    }
+  }
+
+  function url() {
+    // Cache-bust per refresh so the TV's own image cache cannot pin an old
+    // frame, while the edge still caches within its window.
+    return API + "/v1/spots/" + SPOT + "/frame.png?t=" + Date.now();
+  }
+
+  function load() {
+    var next = new Image();
+    next.onload = function () {
+      frame.classList.add("swapping");
+      setTimeout(function () {
+        frame.src = next.src;
+        frame.classList.remove("swapping");
+      }, 300);
+      spinner.classList.add("hidden");
+      failures = 0;
+      show("");
+      setTimeout(load, REFRESH_MS);
+    };
+    next.onerror = function () {
+      failures += 1;
+      spinner.classList.add("hidden");
+      // Keep the last good frame on screen rather than blanking. It is still
+      // a true reading, just an ageing one, which is the same thing the sign
+      // and the display client do during an outage.
+      show("offline · showing last reading · retry " + failures, true);
+      setTimeout(load, RETRY_MS);
+    };
+    next.src = url();
+  }
+
+  // D-pad handling is required for Samsung certification, and Return should
+  // exit rather than trap the viewer in the app.
+  document.addEventListener("keydown", function (event) {
+    switch (event.keyCode) {
+      case 10009: // RETURN
+        try { tizen.application.getCurrentApplication().exit(); } catch (e) {}
+        break;
+      case 13:    // ENTER
+      case 415:   // PLAY
+        show("refreshing");
+        load();
+        break;
+      default:
+        break;
+    }
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>

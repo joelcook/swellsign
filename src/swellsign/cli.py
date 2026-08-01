@@ -25,7 +25,7 @@ from .display.palette import BrightnessController, BrightnessSchedule
 from .display.renderer import DisplayRenderer, animation_phase
 from .display.simulator import render_json_file
 from .services.collector import build_default_collection_service
-from .services.snapshot import SnapshotComposer
+from .services.snapshot import SnapshotComposer, compact_display_payload
 from .services.tide import TideContextService
 from .storage import SQLiteRepository
 
@@ -322,6 +322,64 @@ def write_state_fixtures_command(
 
     written = write_state_fixtures(directory)
     typer.echo(json.dumps([str(path) for path in written], indent=2))
+
+
+@app.command("frame-tv")
+def frame_tv(
+    host: Annotated[str, typer.Option(help="The TV's IP address on your LAN.")],
+    spot_id: Annotated[str, typer.Option()] = "new-smyrna",
+    interval_minutes: Annotated[
+        float,
+        typer.Option(min=1.0, help="How often to push a new image."),
+    ] = 15.0,
+    brightness: Annotated[float, typer.Option(min=0.0, max=1.0)] = 0.55,
+    cell: Annotated[int, typer.Option(min=4, max=40, help="LED size in pixels.")] = 20,
+    token_file: Annotated[Path, typer.Option()] = Path("data/frame-tv-token.txt"),
+    once: Annotated[bool, typer.Option("--once", help="Push a single frame and exit.")] = False,
+) -> None:
+    """Push the rendered face to a Samsung Frame TV's Art Mode.
+
+    Art Mode shows while the TV is in standby, so this is the ambient view.
+    Nothing of ours runs on the TV; it is receiving pixels, exactly like the
+    HUB75 panel does.
+    """
+    from .display.frame import render_frame_image
+    from .display.frametv import FrameTvArtClient
+
+    settings, product_config, repository = _runtime()
+    _configure_logging(settings.log_level)
+    composer = SnapshotComposer(repository, product_config)
+    tide_service = TideContextService(repository, product_config)
+    client = FrameTvArtClient(host=host, token_file=token_file)
+
+    if not client.supported():
+        typer.echo(
+            f"{host} did not report Art Mode support. Confirm it is a Frame, that it is "
+            "powered, and that this machine is on the same network.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    def push_once() -> None:
+        snapshot = composer.compose(spot_id)
+        payload = compact_display_payload(
+            snapshot,
+            product_config,
+            tide=tide_service.phase(spot_id),
+        )
+        image = render_frame_image(payload, cell=cell, brightness=brightness)
+        content_id = client.push(image)
+        typer.echo(f"pushed {content_id or '(failed)'}")
+
+    push_once()
+    if once:
+        return
+    try:
+        while True:
+            time.sleep(interval_minutes * 60)
+            push_once()
+    except KeyboardInterrupt:
+        pass
 
 
 @app.command("display")

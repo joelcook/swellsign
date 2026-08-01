@@ -105,6 +105,26 @@ not.
 
 ![Four states: fresh, ALT fallback, stale, and no wave data](docs/states.png)
 
+### Samsung Frame TV
+
+Two paths, and they are mutually exclusive states of the television: a Tizen
+web app shows while the TV is **on**, Art Mode shows while it is **off**. Both
+consume the same server-rendered frame, so neither can drift from the physical
+sign.
+
+```bash
+GET /v1/spots/{spot_id}/frame.png          # 3840x2160 by default
+
+pip install 'swellsign[frame]'
+swellsign frame-tv --host 192.168.1.50     # push to Art Mode on a schedule
+```
+
+The Tizen app lives in [tizen/](tizen/) and is about a hundred lines: it fetches
+that image and displays it. Sideloading to your own TV needs no store
+submission. See [tizen/README.md](tizen/README.md).
+
+Neither path has been tested against real hardware yet.
+
 ### Browser panel
 
 ```bash

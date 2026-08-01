@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets"
+        xmlns:tizen="http://tizen.org/ns/widgets"
+        id="http://swellsign/sign"
+        version="1.0.0"
+        viewmodes="maximized">
+    <tizen:application id="SwellSign0.sign"
+                       package="SwellSign0"
+                       required_version="6.0"/>
+    <content src="index.html"/>
+    <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
+    <icon src="icon.png"/>
+    <name>Swell Sign</name>
+    <description>What the ocean is doing right now.</description>
+    <!-- The app fetches a rendered frame from the backend, so it needs
+         network access and permission to reach that origin. -->
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <access origin="*" subdomains="true"/>
+    <tizen:profile name="tv-samsung"/>
+    <tizen:setting screen-orientation="landscape"
+                   background-support="disable"
+                   encryption="disable"
+                   hwkey-event="enable"/>
+</widget>

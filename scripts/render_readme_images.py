@@ -15,7 +15,8 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 from swellsign.display.client import recalculate_ages
-from swellsign.display.renderer import HEIGHT, WIDTH, DisplayRenderer, animation_phase
+from swellsign.display.frame import enclosure, led_panel
+from swellsign.display.renderer import DisplayRenderer, animation_phase
 from swellsign.display.web import build_state
 from swellsign.models import CompactDisplayPayload
 
@@ -33,53 +34,6 @@ def face(state: str, *, brightness: float = 0.55, elapsed: float = 2.0) -> Image
     )
 
 
-def leds(frame: Image.Image, cell: int) -> Image.Image:
-    """Draw the frame as discrete emitters behind a diffuser."""
-    gap = max(1, round(cell * 0.16))
-    dot = cell - gap
-    radius = dot / 2
-    panel = Image.new("RGB", (WIDTH * cell, HEIGHT * cell), (0, 0, 0))
-    draw = ImageDraw.Draw(panel)
-
-    for y in range(HEIGHT):
-        for x in range(WIDTH):
-            cx, cy = x * cell + cell / 2, y * cell + cell / 2
-            pixel = frame.getpixel((x, y))
-            if pixel == (0, 0, 0):
-                # Unlit emitters are not truly black on a real panel.
-                r = radius * 0.42
-                draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(7, 8, 8))
-            else:
-                draw.ellipse(
-                    [cx - radius, cy - radius, cx + radius, cy + radius], fill=pixel
-                )
-
-    glow = panel.filter(ImageFilter.GaussianBlur(cell * 0.55))
-    glow = glow.point(lambda value: int(value * 0.6))
-    return ImageChops.screen(panel, glow)
-
-
-def enclosure(panel: Image.Image, *, pad: int = 34, radius: int = 18) -> Image.Image:
-    """Dark case, shallow shadow gap from the wall, continuous acrylic face."""
-    body = Image.new("RGB", (panel.width + pad * 2, panel.height + pad * 2), WALL)
-    draw = ImageDraw.Draw(body)
-    draw.rounded_rectangle(
-        [0, 0, body.width - 1, body.height - 1], radius=radius, fill=(23, 26, 28)
-    )
-    draw.rounded_rectangle(
-        [1, 1, body.width - 2, body.height - 2], radius=radius, outline=(38, 42, 45)
-    )
-    body.paste(panel, (pad, pad))
-
-    # A faint diagonal sheen reads as acrylic. It has to be blurred hard: a
-    # crisp edge looks like a rendering artifact rather than a reflection.
-    sheen = Image.new("L", body.size, 0)
-    ImageDraw.Draw(sheen).polygon(
-        [(0, 0), (body.width * 0.5, 0), (0, body.height * 1.8)], fill=22
-    )
-    sheen = sheen.filter(ImageFilter.GaussianBlur(body.height * 0.22))
-    body = ImageChops.screen(body, Image.merge("RGB", (sheen, sheen, sheen)))
-    return body
 
 
 def mount(sign: Image.Image, *, margin: int = 72) -> Image.Image:
@@ -120,12 +74,12 @@ def stack(frames: list[Image.Image], *, gap: int = 22) -> Image.Image:
 def main() -> None:
     DOCS.mkdir(parents=True, exist_ok=True)
 
-    hero = mount(enclosure(leds(face("swell"), cell=13)))
+    hero = mount(enclosure(led_panel(face("swell"), cell=13)))
     hero.save(DOCS / "swell-sign.png")
     print(f"docs/swell-sign.png {hero.size}")
 
     states = stack(
-        [enclosure(leds(face(name), cell=7), pad=18, radius=10)
+        [enclosure(led_panel(face(name), cell=7), pad=18, radius=10)
          for name in ("fresh", "fallback", "stale", "no-wave")]
     )
     states.save(DOCS / "states.png")
