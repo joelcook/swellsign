@@ -43,6 +43,22 @@ trend are allowed because they describe the data, not the surf.
 - **Wave and wind age independently.** They come from different stations and
   keep their own timestamps, freshness, and provenance.
 
+## Product decisions that look like bugs
+
+These were made deliberately. Do not "fix" them back.
+
+- **The face says `SWELL` for everything.** `display.wave_label`, set 2026-07-31.
+  41070 publishes no partition data and never will, so a basis-derived label
+  would read `SEAS` permanently and distinguish nothing. `measurement_basis` in
+  `/now` and in storage stays honest.
+- **The face shows modeled wind, unmarked.** `display.wind_source: beach`, set
+  2026-08-01. The configured anemometer is 31.6 km offshore where wind runs far
+  above beach values; no anemometer stands on the beach, so the model at the
+  spot's coordinates is the only available answer. Wind at a beach is understood
+  to be forecast, the way tide is, so the face carries no marker. The compact
+  payload still carries `source: "buoy" | "model"`, and `/now` still reports the
+  measured buoy with its distance.
+
 ## Display
 
 - The renderer is the single source of truth for what the sign shows. The Pi
