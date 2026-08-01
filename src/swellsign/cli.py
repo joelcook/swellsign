@@ -352,6 +352,13 @@ def frame_tv(
     tide_service = TideContextService(repository, product_config)
     client = FrameTvArtClient(host=host, token_file=token_file)
 
+    if not token_file.exists():
+        typer.echo(
+            f"First connection to {host}. The TV will show an 'allow this device?' "
+            "prompt naming Swell Sign — accept it on screen within 45 seconds. "
+            "The approval is cached, so this is asked once.",
+        )
+
     if not client.supported():
         typer.echo(
             f"{host} did not report Art Mode support. Confirm it is a Frame, that it is "

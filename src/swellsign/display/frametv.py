@@ -41,6 +41,10 @@ class FrameTvArtClient:
     token_file: Path | None = None
     keep: int = DEFAULT_KEEP
     matte: str = "none"
+    # samsungtvws defaults to no timeout, which blocks forever on the first
+    # connection while the TV waits for someone to accept its on-screen
+    # pairing prompt. Long enough to walk to the remote, short enough to fail.
+    timeout_seconds: float = 45.0
     _uploaded: list[str] = field(default_factory=list, init=False)
     _tv: Any = field(default=None, init=False)
 
@@ -58,7 +62,16 @@ class FrameTvArtClient:
         # A token file lets the TV remember the pairing, so the on-screen
         # "allow this device?" prompt appears once rather than every run.
         token = str(self.token_file) if self.token_file else None
-        self._tv = SamsungTVWS(host=self.host, port=self.port, token_file=token)
+        self._tv = SamsungTVWS(
+            host=self.host,
+            port=self.port,
+            token_file=token,
+            timeout=self.timeout_seconds,
+            # This string is what the TV shows in its "allow this device?"
+            # prompt. The library default is "SamsungTvRemote", which is easy
+            # to mistake for something unwanted and decline.
+            name="Swell Sign",
+        )
         return self._tv
 
     def supported(self) -> bool:
