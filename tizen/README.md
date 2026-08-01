@@ -43,10 +43,13 @@ Tizen Studio replaces it.
 
 ## Art Mode instead
 
+`swellsign` is not published to PyPI, so install the dependency directly and
+run from the source tree the way everything else here does:
+
 ```bash
-pip install 'swellsign[frame]'
-swellsign frame-tv --host 192.168.1.50 --once      # prove the pairing works
-swellsign frame-tv --host 192.168.1.50             # then leave it running
+pip3 install samsungtvws
+PYTHONPATH=src python3 -m swellsign frame-tv --host 192.168.1.50 --once
+PYTHONPATH=src python3 -m swellsign frame-tv --host 192.168.1.50
 ```
 
 The first connection makes the TV show an "allow this device?" prompt. Accept

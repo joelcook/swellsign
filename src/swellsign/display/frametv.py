@@ -77,7 +77,14 @@ class FrameTvArtClient:
 
         try:
             art = self._connect().art()
-            content_id = art.upload(payload, file_type="PNG", matte=self.matte)
+            content_id = art.upload(
+                payload,
+                file_type="png",
+                matte=self.matte,
+                # Left unset this defaults to shadowbox_polar, which would
+                # frame an already-framed 16:9 render a second time.
+                portrait_matte=self.matte,
+            )
         except Exception as error:
             logger.warning("frame upload failed", extra={"error": str(error)})
             return None

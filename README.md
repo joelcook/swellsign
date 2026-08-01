@@ -115,8 +115,8 @@ sign.
 ```bash
 GET /v1/spots/{spot_id}/frame.png          # 3840x2160 by default
 
-pip install 'swellsign[frame]'
-swellsign frame-tv --host 192.168.1.50     # push to Art Mode on a schedule
+pip3 install samsungtvws                   # not on PyPI; install the dep only
+PYTHONPATH=src python3 -m swellsign frame-tv --host 192.168.1.50
 ```
 
 The Tizen app lives in [tizen/](tizen/) and is about a hundred lines: it fetches
