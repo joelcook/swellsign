@@ -34,6 +34,10 @@ GLASS = (79, 189, 180)
 WARM = (216, 201, 166)
 AMBER = (210, 130, 58)
 MUTED = (110, 122, 126)
+# Labels sit between the cyan heading and the warm values: clearly legible,
+# clearly subordinate, and a different hue from both so the three tiers read
+# as a hierarchy rather than as one washed-out family.
+LABEL = (150, 170, 176)
 PAPER = (242, 236, 224)
 
 
@@ -116,13 +120,10 @@ def render_editorial_image(
     left = int(width * 0.05)
     bottom = int(height * 0.955)
 
-    label_font = _font(int(13 * unit))
-    value_font = _font(int(46 * unit))
-    place_font = _font(int(17 * unit))
-    big_font = _font(int(168 * unit))
-    unit_font = _font(int(50 * unit))
+    place_font = _font(int(21 * unit))
+    probe = _font(int(62 * unit))
 
-    if big_font is None:
+    if probe is None:
         # No system typeface: fall back to the bundled pixel font rather than
         # failing. Ugly, but it still tells you what the ocean is doing.
         pixel_text(scene, data.spot, (left, bottom - int(120 * unit)), scale=max(1, int(6 * unit)), color=WARM)
@@ -138,53 +139,45 @@ def render_editorial_image(
 
     facts: list[tuple[str, str, tuple[int, int, int]]] = []
     if data.wave:
-        facts.append(("Period", f"{data.wave.period_s:g}s", WARM))
-        facts.append(("Swell", data.wave.direction or "--", WARM))
+        facts.append(("Height", f"{data.wave.height_ft:.1f}ft", PAPER))
+        facts.append(("Period", f"{data.wave.period_s:g}s", PAPER))
+        facts.append(("Swell", data.wave.direction or "--", PAPER))
     if data.wind:
         facts.append(("Wind", f"{data.wind.direction or '--'} {data.wind.speed_mph:.0f}", AMBER))
     if data.tide:
-        # The triangle is drawn as a shape below. Helvetica has no U+25B2/25BC,
-        # so relying on the glyph renders tofu.
+        # Drawn as a polygon below; Helvetica has no U+25B2 and renders tofu.
         facts.append(("Tide", data.tide.level.title(), WARM))
 
-    fact_top = bottom - int(46 * unit) - int(28 * unit)
-    label_top = fact_top - int(13 * unit) - int(14 * unit)
+    value_font = _font(int(62 * unit))
+    label_font = _font(int(19 * unit))
 
-    # The height sets the baseline everything else sits on.
-    big = f"{data.wave.height_ft:.1f}" if data.wave else "--"
-    big_h = big_font.getbbox(big)[3]
-    draw.text((left, bottom - big_h - int(10 * unit)), big, font=big_font, fill=PAPER)
-    big_w = draw.textlength(big, font=big_font)
-    draw.text(
-        (left + big_w + int(8 * unit), bottom - int(58 * unit)),
-        "FT",
-        font=unit_font,
-        fill=MUTED,
-    )
+    fact_top = bottom - int(62 * unit) - int(34 * unit)
+    label_top = fact_top - int(19 * unit) - int(20 * unit)
 
-    x = left + big_w + int(150 * unit)
+    x = left
     for key, value, colour in facts:
-        _tracked(draw, key.upper(), (int(x), label_top), label_font, (89, 99, 102), 4.2 * unit)
+        _tracked(draw, key.upper(), (int(x), label_top), label_font, LABEL, 5.0 * unit)
+        start = x
         if key == "Tide" and data.tide is not None:
-            size = int(20 * unit)
-            top = fact_top + int(20 * unit)
+            size = int(26 * unit)
+            top = fact_top + int(26 * unit)
             if data.tide.state == "rising":
                 points = [(x, top + size), (x + size, top + size), (x + size / 2, top)]
             else:
                 points = [(x, top), (x + size, top), (x + size / 2, top + size)]
             draw.polygon(points, fill=colour)
-            x += size + int(14 * unit)
+            x += size + int(16 * unit)
         draw.text((int(x), fact_top), value, font=value_font, fill=colour)
-        x += max(
-            _tracked_width(draw, key.upper(), label_font, 4.2 * unit),
-            draw.textlength(value, font=value_font),
-        ) + int(54 * unit)
+        x = start + max(
+            _tracked_width(draw, key.upper(), label_font, 5.0 * unit),
+            (x - start) + draw.textlength(value, font=value_font),
+        ) + int(88 * unit)
 
     heading = (place or data.spot).upper()
     _tracked(
         draw,
         heading,
-        (left, label_top - int(17 * unit) - int(30 * unit)),
+        (left, label_top - int(21 * unit) - int(34 * unit)),
         place_font,
         GLASS,
         8.5 * unit,
