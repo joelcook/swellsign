@@ -23,6 +23,19 @@ freshness:
   # still derived, so you can pin just one edge of the ladder.
   stations: {}
 
+# The sign's wave label. This overrides the basis-derived label (SEAS for total
+# sea state, SWELL for a genuine partition, PART for a local one) on the
+# physical face only. `/now`, storage, and provenance keep reporting the real
+# measurement_basis, so nothing here causes a total sea state to be recorded as
+# a swell partition.
+#
+# Chosen deliberately on 2026-07-31: 41070 publishes no partition data and
+# never will, so the honest label would read SEAS permanently and distinguish
+# nothing. The cost is that the 41113 fallback, which does report a genuine
+# partition, now shares the same word. Set to null for honest labels.
+display:
+  wave_label: SWELL
+
 trend:
   window_hours: 6
   minimum_samples: 4

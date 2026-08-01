@@ -12,10 +12,15 @@ You get the measurement, how old it is, which direction it's moving, and the
 truth about where it came from. You supply the surf knowledge.
 
 There is no surf score, quality color, star rating, board recommendation, or
-model value masquerading as a measurement. `SEAS` means provider-reported total
-sea state; `SWELL` appears only for a coherent provider-reported swell
-partition. The small arrow is a robust six-hour measured-height trend, not a
-verdict.
+model value masquerading as a measurement. The small arrow is a robust six-hour
+measured-height trend, not a verdict.
+
+The face labels the wave row `SWELL`, set by `display.wave_label` in
+[config/spots.yaml](config/spots.yaml). The underlying `measurement_basis` is
+always reported honestly in `/now` and in storage — New Smyrna's `41070`
+publishes no partition data, so its readings are `total_sea` and say so in the
+API. Set `wave_label` to null to label the sign by basis instead
+(`SEAS` / `SWELL` / `PART`).
 
 Every image here is rendered by the actual display code, not mocked up.
 

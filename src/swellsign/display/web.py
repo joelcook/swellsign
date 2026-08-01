@@ -33,7 +33,7 @@ PAGE_PATH = Path(__file__).with_name("simulator.html")
 # accepts, not a hand-drawn mock of what we hope it looks like.
 STATES: dict[str, str] = {
     "fresh": "Fresh primary observation",
-    "swell": "Genuine separated-swell partition",
+    "swell": "Long-period groundswell reading",
     "rising": "Rising six-hour trend",
     "falling": "Falling six-hour trend",
     "steady": "Steady six-hour trend",
@@ -56,7 +56,9 @@ def _base_payload() -> dict[str, Any]:
         "spot": "NEW SMYRNA",
         "generated_at": "2026-07-30T18:00:00Z",
         "wave": {
-            "label": "SEAS",
+            # Matches config/spots.yaml display.wave_label. These fixtures are
+            # raw compact payloads, so they do not pass through the override.
+            "label": "SWELL",
             "height_ft": 2.6,
             "period_s": 8.1,
             "direction": "NE",
@@ -98,7 +100,6 @@ def build_state(state: str, *, now: datetime | None = None) -> tuple[dict[str, A
     if state == "fresh":
         pass
     elif state == "swell":
-        payload["wave"]["label"] = "SWELL"
         payload["wave"]["period_s"] = 13.2
         payload["wave"]["direction"] = "ENE"
     elif state in {"rising", "falling", "steady"}:
@@ -117,7 +118,6 @@ def build_state(state: str, *, now: datetime | None = None) -> tuple[dict[str, A
         payload["wind"]["freshness"] = "stale"
     elif state == "fallback":
         payload["fallback_used"] = True
-        payload["wave"]["label"] = "SWELL"
         payload["wave"]["direction"] = "ESE"
     elif state == "partial-wind":
         payload["wind"] = None

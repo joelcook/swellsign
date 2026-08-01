@@ -29,9 +29,17 @@ trend are allowed because they describe the data, not the surf.
   A missing direction renders `--`; it does not render `0`.
 - **Never stitch a wave triplet across timestamps or stations.** Height from one
   observation and period from another is a fabrication.
-- **`SEAS` and `SWELL` are not interchangeable.** `SEAS` is total significant
-  wave height, `SWELL` is a genuine provider-reported partition. Mislabeling one
-  as the other is the single most misleading thing this codebase could do.
+- **`measurement_basis` is never fudged.** `total_sea` and `separated_swell`
+  describe genuinely different quantities, and storage, `/now`, and provenance
+  must always report which one a number actually is.
+
+  The *sign's* label is a separate question and is now overridden. As of
+  2026-07-31 `config/spots.yaml` sets `display.wave_label: SWELL`, so the face
+  reads `SWELL` regardless of basis. This was the product owner's call, made
+  with the tradeoff stated: `41070` publishes no partition data and never will,
+  so the honest label would have read `SEAS` permanently and distinguished
+  nothing. Do not "fix" this back, and do not let it leak past the compact
+  display payload into the data model.
 - **Wave and wind age independently.** They come from different stations and
   keep their own timestamps, freshness, and provenance.
 

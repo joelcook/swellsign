@@ -62,6 +62,29 @@ class FreshnessConfig(BaseModel):
         return self
 
 
+class DisplayConfig(BaseModel):
+    """How the physical sign labels things.
+
+    `wave_label` overrides the basis-derived label on the sign only. It does
+    not touch `measurement_basis` or `display_label` in `/now`, so the API
+    still reports exactly what the number is and a total sea state is never
+    recorded as a swell partition anywhere in storage or provenance.
+
+    Set to `SWELL` by the product owner on 2026-07-31, with the tradeoff
+    understood: 41070 cannot publish a partition, so the honest label would
+    read `SEAS` permanently, and the 41113 fallback now shares the same word.
+    Set to null to restore basis-derived labels (SEAS / SWELL / PART).
+    """
+
+    wave_label: str | None = None
+
+    @model_validator(mode="after")
+    def _label_fits_the_field(self) -> DisplayConfig:
+        if self.wave_label is not None and not 1 <= len(self.wave_label) <= 5:
+            raise ValueError("wave_label must be 1 to 5 characters to fit the label box")
+        return self
+
+
 class TrendConfig(BaseModel):
     window_hours: float = 6
     minimum_samples: int = 4
@@ -123,6 +146,7 @@ class ProductConfig(BaseModel):
     freshness: FreshnessConfig = Field(default_factory=FreshnessConfig)
     trend: TrendConfig = Field(default_factory=TrendConfig)
     forecast: ForecastConfig = Field(default_factory=ForecastConfig)
+    display: DisplayConfig = Field(default_factory=DisplayConfig)
     stations: dict[str, Station]
     spots: dict[str, SpotConfig]
 

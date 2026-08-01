@@ -237,8 +237,15 @@ def compact_display_payload(
             if snapshot.trend.wave_height is not None
             else "unknown"
         )
+        # The sign's label may be overridden in configuration; the snapshot's
+        # own display_label and measurement_basis stay basis-derived so `/now`
+        # and storage keep saying exactly what the number is.
+        label = snapshot.wave.display_label
+        if product_config is not None and product_config.display.wave_label:
+            label = product_config.display.wave_label
+
         wave = CompactWave(
-            label=snapshot.wave.display_label,
+            label=label,
             height_ft=snapshot.wave.height_ft,
             period_s=snapshot.wave.period_s,
             direction=snapshot.wave.direction_cardinal,

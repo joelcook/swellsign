@@ -351,7 +351,25 @@ Presentation labels:
 | `total_sea` | `SEAS` | Combined significant wave conditions |
 | `spectral_partition` | `PART` | Derived partition; provenance remains visible in full API |
 
-Do not label `WVHT` as `SWELL`. Do not label any of these values as breaking surf height.
+Do not label any of these values as breaking surf height.
+
+### 5.1.1 Sign label override
+
+The table above governs `measurement_basis` and the `display_label` returned by
+`/now`, which must always name the quantity honestly. The label printed on the
+physical sign is configurable separately via `display.wave_label`.
+
+As of July 31, 2026 that is set to `SWELL` for New Smyrna. The reasoning:
+`41070` publishes no separated-swell or spectral products at all — verified,
+every spectral endpoint returns 404 and the `Sw*` fields are permanently `MM` —
+so a basis-derived label would read `SEAS` forever and distinguish nothing. The
+accepted cost is that the `41113` fallback, which does report a genuine
+partition, now shares the same word on the face.
+
+This override applies only to the compact display payload. It must never reach
+storage, `measurement_basis`, or the full snapshot, where a total sea state
+being recorded as a swell partition would corrupt the archive and any later
+forecast verification. Setting `wave_label` to null restores `SEAS`/`SWELL`/`PART`.
 
 ### 5.2 Time
 
